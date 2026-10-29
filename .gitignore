@@ -2,4 +2,5 @@
 **/*.rs.bk
 .env
 .env.*
+!.env.sample
 !/rust-toolchain.toml
