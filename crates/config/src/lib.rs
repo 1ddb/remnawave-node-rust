@@ -431,7 +431,45 @@ pub fn persist_runtime_env() {
     if let Some(parent) = std::path::Path::new(RUNTIME_ENV_FILE).parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let _ = std::fs::write(RUNTIME_ENV_FILE, out);
+
+    // Write through a temporary file so a crash cannot leave a partially
+    // written token file behind. The file is readable only by the owner:
+    // it contains INTERNAL_REST_TOKEN.
+    #[cfg(unix)]
+    {
+        use std::io::Write;
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+        let tmp_path = format!("{RUNTIME_ENV_FILE}.tmp");
+
+        let Ok(mut file) = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp_path)
+        else {
+            return;
+        };
+        if file.write_all(out.as_bytes()).is_err() || file.sync_all().is_err() {
+            let _ = std::fs::remove_file(&tmp_path);
+            return;
+        }
+        drop(file);
+        let _ = std::fs::set_permissions(&tmp_path, std::fs::Permissions::from_mode(0o600));
+        if std::fs::rename(&tmp_path, RUNTIME_ENV_FILE).is_err() {
+            let _ = std::fs::remove_file(&tmp_path);
+            return;
+        }
+        let _ = std::fs::set_permissions(
+            RUNTIME_ENV_FILE,
+            std::fs::Permissions::from_mode(0o600),
+        );
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = std::fs::write(RUNTIME_ENV_FILE, out);
+    }
 }
 
 pub fn resolve_runtime_var(name: &str) -> Option<String> {

@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -30,9 +30,7 @@ use crate::api_config::{generate_api_config, InternalView, TorrentBlockerStateVi
 use crate::core_loader::CoreLoader;
 use crate::geodata::Geodata;
 use crate::internal_service::InternalService;
-use crate::process::{ProcessStatus, XrayProcess, XRAY_LOG_FILE};
-
-pub const XRAY_CORE_LINK: &str = "/usr/local/bin/rw-core";
+use crate::process::{CORE_LINK, ProcessEvent, ProcessStatus, XrayProcess, XRAY_LOG_FILE};
 
 pub struct XrayServiceConfig {
     pub internal_socket_path: String,
@@ -51,6 +49,8 @@ pub struct XrayService {
     xray_version: RwLock<Option<String>>,
     is_xray_online: AtomicBool,
     is_started_processing: AtomicBool,
+    handled_generation: AtomicU64,
+    last_metadata: RwLock<Option<rw_contract::models::NodeMetadata>>,
     node_version: String,
     disable_hashed_set_check: bool,
     internal_view: InternalView,
@@ -96,6 +96,8 @@ impl XrayService {
             xray_version: RwLock::new(None),
             is_xray_online: AtomicBool::new(false),
             is_started_processing: AtomicBool::new(false),
+            handled_generation: AtomicU64::new(0),
+            last_metadata: RwLock::new(None),
             node_version: option_env!("RWNODE_VERSION")
                 .unwrap_or(env!("CARGO_PKG_VERSION"))
                 .to_string(),
@@ -127,10 +129,67 @@ impl XrayService {
         self.is_xray_online.load(Ordering::SeqCst)
     }
 
+    /// Watch process lifecycle events and refresh the cached RPC/online state
+    /// when the supervisor restarts Xray on its own.
+    pub fn start_watchdog(self: &Arc<Self>) {
+        let this = self.clone();
+        let mut events = self.process.subscribe();
+
+        tokio::spawn(async move {
+            loop {
+                if events.changed().await.is_err() {
+                    return;
+                }
+                let event = *events.borrow_and_update();
+                match event {
+                    ProcessEvent::Down => {
+                        *this.rpc.write().await = None;
+                        this.is_xray_online.store(false, Ordering::SeqCst);
+                    }
+                    ProcessEvent::Up { pid, generation } => {
+                        if this.is_started_processing.load(Ordering::SeqCst)
+                            || this.handled_generation.load(Ordering::SeqCst) == generation
+                        {
+                            continue;
+                        }
+                        this.recover_after_supervisor_restart(pid, generation).await;
+                    }
+                }
+            }
+        });
+    }
+
+    async fn recover_after_supervisor_restart(&self, pid: u32, generation: u64) {
+        warn!("Xray supervisor restarted the core (pid {pid}); reconnecting RPC");
+        *self.rpc.write().await = None;
+        self.is_xray_online.store(false, Ordering::SeqCst);
+        self.refresh_xray_version().await;
+
+        let (ready, error) = self.wait_for_rpc(Some(pid)).await;
+        if !ready {
+            error!(
+                "Xray Core restarted by supervisor but did not become ready: {}",
+                error.unwrap_or_else(|| "unknown error".into())
+            );
+            return;
+        }
+
+        self.handled_generation.store(generation, Ordering::SeqCst);
+        self.is_xray_online.store(true, Ordering::SeqCst);
+        self.refresh_xray_version().await;
+        info!(
+            "✔ XRay Core v{:?} is up after supervisor restart.",
+            *self.xray_version.read().await
+        );
+
+        let metadata = self.last_metadata.read().await.clone();
+        self.run_post_start(&metadata).await;
+    }
+
     pub async fn get_xray_info(&self) -> (Option<String>, String) {
         (
             self.xray_version.read().await.clone(),
-            XRAY_CORE_LINK.to_string(),
+            CORE_LINK.to_string(),
         )
     }
 
@@ -181,6 +240,8 @@ impl XrayService {
         let node_information = rw_contract::commands::NodeInformation {
             version: Some(self.node_version.clone()),
         };
+
+        *self.last_metadata.write().await = body.internals.metadata.clone();
 
         if body.internals.force_restart {
             warn!("Force restart requested");
@@ -250,6 +311,9 @@ impl XrayService {
 
         if let Err(e) = self.process.start().await {
             error!("Failed to start Xray process: {e}");
+            *self.rpc.write().await = None;
+            self.is_xray_online.store(false, Ordering::SeqCst);
+            self.process.stop().await;
             return StartXrayResponseData {
                 is_started: false,
                 version: None,
@@ -258,11 +322,16 @@ impl XrayService {
                 system,
             };
         }
+        self.handled_generation
+            .store(self.process.current_generation().await, Ordering::SeqCst);
 
         let status = self.wait_for_internal_status().await;
         if !status.0 {
             self.is_xray_online.store(false, Ordering::SeqCst);
+            *self.rpc.write().await = None;
             error!("Xray Core v{:?} failed to start.", *self.xray_version.read().await);
+            // Do not leave a process that never passed the health check running.
+            self.process.stop().await;
             let tail = self.process.tail_log_lines(5).await;
             let log_reason = tail
                 .last()
@@ -330,6 +399,10 @@ impl XrayService {
 
     async fn wait_for_internal_status(&self) -> (bool, Option<String>) {
         let started_pid = self.process.status().await.pid;
+        self.wait_for_rpc(started_pid).await
+    }
+
+    async fn wait_for_rpc(&self, expected_pid: Option<u32>) -> (bool, Option<String>) {
         let mut delay = Duration::from_millis(100);
 
         for attempt in 1..=30 {
@@ -348,7 +421,7 @@ impl XrayService {
                     Ok(Err(e)) => e.to_string(),
                     Err(_) => "request timed out".to_string(),
                 };
-                if !self.alive_with_pid(started_pid).await {
+                if !self.alive_with_pid(expected_pid).await {
                     return (
                         false,
                         Some(format!(
@@ -358,7 +431,7 @@ impl XrayService {
                     );
                 }
                 debug!("Xray status check {attempt}/30 failed: {error}");
-            } else if !self.alive_with_pid(started_pid).await {
+            } else if !self.alive_with_pid(expected_pid).await {
                 return (
                     false,
                     Some("Xray Core process is not running anymore".into()),

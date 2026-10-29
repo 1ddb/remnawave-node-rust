@@ -1,13 +1,11 @@
 use std::path::PathBuf;
-use std::time::Duration;
 
-use rw_core::download::{download_file, DownloadOptions};
+use rw_core::download::{download_file_with_retry, DownloadOptions};
 use serde::Deserialize;
 use serde_json::Value;
 use tracing::{error, info, warn};
 
 pub const ASSETS_DIR: &str = "/usr/local/share/xray";
-pub const TOTAL_TIMEOUT_MS: u64 = 15_000;
 pub const CONCURRENCY: usize = 5;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -39,6 +37,12 @@ impl Geodata {
         if parsed.assets.is_empty() {
             return Ok(());
         }
+        for asset in &parsed.assets {
+            if !asset.url.starts_with("https://") || !safe_file_name(&asset.file) {
+                warn!("Invalid \"assets\" section, skipped.");
+                return Ok(());
+            }
+        }
 
         let assets = parsed.assets;
         // Await every chunk before starting the next one, otherwise `chunks`
@@ -69,13 +73,10 @@ async fn prepare_asset(asset: Asset) {
         return;
     }
 
-    if let Ok(downloaded) = download_file(
+    if let Ok(downloaded) = download_file_with_retry(
         &asset.url,
         &path,
-        DownloadOptions {
-            total_timeout: Duration::from_millis(TOTAL_TIMEOUT_MS),
-            ..Default::default()
-        },
+        DownloadOptions::default(),
     )
     .await
     {

@@ -95,6 +95,7 @@ fn main() {
         )
         .await;
         let xray = Arc::new(xray);
+        xray.start_watchdog();
 
         let state = AppState {
             config: config.clone(),

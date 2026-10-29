@@ -82,7 +82,7 @@ LABEL org.opencontainers.image.vendor="Remnawave"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 LABEL org.opencontainers.image.documentation="https://docs.rw"
 
-RUN apk add --no-cache ca-certificates nftables iproute2 \
+RUN apk add --no-cache ca-certificates iproute2 \
     && mkdir -p /var/log/xray /run \
     && ln -s /usr/local/bin/xray /usr/local/bin/rw-core \
     && ln -s /usr/local/bin/rw-node /usr/local/bin/cli \

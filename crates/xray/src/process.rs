@@ -7,7 +7,7 @@ use std::time::Duration;
 use rw_core::version::{read_core_version, CoreVersion};
 use thiserror::Error;
 use tokio::process::{Child, Command};
-use tokio::sync::Mutex;
+use tokio::sync::{watch, Mutex};
 use tracing::{error, info, warn};
 
 pub const CORE_LINK: &str = "/usr/local/bin/rw-core";
@@ -21,6 +21,12 @@ pub enum ProcessError {
     Spawn(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProcessEvent {
+    Down,
+    Up { pid: u32, generation: u64 },
+}
+
 #[derive(Debug, Clone)]
 pub struct ProcessStatus {
     pub up: bool,
@@ -32,6 +38,7 @@ struct State {
     child: Option<Child>,
     restart_count: u32,
     monitor_running: bool,
+    generation: u64,
 }
 
 #[derive(Clone)]
@@ -41,6 +48,7 @@ pub struct XrayProcess {
     config_arg: String,
     state: Arc<Mutex<State>>,
     stopping: Arc<AtomicBool>,
+    events: watch::Sender<ProcessEvent>,
 }
 
 impl XrayProcess {
@@ -55,6 +63,7 @@ impl XrayProcess {
             "@{internal_socket_path}:/internal/get-config?token={internal_token}"
         );
         let _ = xtls_api_socket_path;
+        let (events, _) = watch::channel(ProcessEvent::Down);
         Self {
             core_link: core_link.into(),
             log_path: log_path.into(),
@@ -63,9 +72,21 @@ impl XrayProcess {
                 child: None,
                 restart_count: 0,
                 monitor_running: false,
+                generation: 0,
             })),
             stopping: Arc::new(AtomicBool::new(false)),
+            events,
         }
+    }
+
+    /// Subscribe to process lifecycle events. `Up` is emitted on every spawn,
+    /// including restarts performed by the supervisor.
+    pub fn subscribe(&self) -> watch::Receiver<ProcessEvent> {
+        self.events.subscribe()
+    }
+
+    pub async fn current_generation(&self) -> u64 {
+        self.state.lock().await.generation
     }
 
     pub fn core_link(&self) -> &str {
@@ -120,6 +141,11 @@ impl XrayProcess {
         let pid = child.id().unwrap_or_default();
         info!("Xray process started (pid {pid})");
         state.child = Some(child);
+        state.generation = state.generation.saturating_add(1);
+        self.events.send_replace(ProcessEvent::Up {
+            pid,
+            generation: state.generation,
+        });
         Ok(pid)
     }
 
@@ -134,6 +160,7 @@ impl XrayProcess {
                 // process between the check and `monitor_running = false`.
                 if self.stopping.load(Ordering::SeqCst) {
                     state.monitor_running = false;
+                    self.events.send_replace(ProcessEvent::Down);
                     return;
                 }
                 match state.child.as_mut() {
@@ -142,12 +169,14 @@ impl XrayProcess {
                         Ok(Some(status)) => {
                             warn!("Xray process exited: {status}");
                             state.child = None;
+                            self.events.send_replace(ProcessEvent::Down);
                             true
                         }
                         Ok(None) => false,
                         Err(e) => {
                             error!("Failed to poll Xray process: {e}");
                             state.child = None;
+                            self.events.send_replace(ProcessEvent::Down);
                             true
                         }
                     },
@@ -162,6 +191,7 @@ impl XrayProcess {
                 let mut state = self.state.lock().await;
                 if self.stopping.load(Ordering::SeqCst) {
                     state.monitor_running = false;
+                    self.events.send_replace(ProcessEvent::Down);
                     return;
                 }
                 let delay = backoff(state.restart_count);
@@ -174,6 +204,7 @@ impl XrayProcess {
             let mut state = self.state.lock().await;
             if self.stopping.load(Ordering::SeqCst) {
                 state.monitor_running = false;
+                self.events.send_replace(ProcessEvent::Down);
                 return;
             }
             if state.child.is_none() {
@@ -193,6 +224,7 @@ impl XrayProcess {
             info!("Xray process stopped");
         }
         state.restart_count = 0;
+        self.events.send_replace(ProcessEvent::Down);
     }
 
     pub async fn status(&self) -> ProcessStatus {

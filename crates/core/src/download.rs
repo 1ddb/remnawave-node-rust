@@ -7,8 +7,10 @@ use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 
 pub const IDLE_TIMEOUT_MS: u64 = 5_000;
-pub const TOTAL_TIMEOUT_MS: u64 = 15_000;
+pub const FIRST_BYTE_TIMEOUT_MS: u64 = 5_000;
 pub const MAX_SIZE: u64 = 128 * 1024 * 1024;
+pub const RETRY_ATTEMPTS: usize = 3;
+pub const RETRY_PAUSE_MS: u64 = 2_000;
 
 #[derive(Debug, Error)]
 pub enum DownloadError {
@@ -32,10 +34,22 @@ pub enum DownloadError {
     Timeout,
 }
 
+impl DownloadError {
+    /// Transient failures worth retrying (connection/timeout/IO).
+    pub fn is_retryable(&self) -> bool {
+        matches!(
+            self,
+            DownloadError::Http(_) | DownloadError::Io(_) | DownloadError::Timeout
+        )
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DownloadOptions {
+    /// Maximum gap between two body chunks.
     pub idle_timeout: Duration,
-    pub total_timeout: Duration,
+    /// Maximum wait for response headers (first byte) after connecting.
+    pub first_byte_timeout: Duration,
     pub max_size: u64,
     pub expected_sha256: Option<String>,
 }
@@ -44,7 +58,7 @@ impl Default for DownloadOptions {
     fn default() -> Self {
         Self {
             idle_timeout: Duration::from_millis(IDLE_TIMEOUT_MS),
-            total_timeout: Duration::from_millis(TOTAL_TIMEOUT_MS),
+            first_byte_timeout: Duration::from_millis(FIRST_BYTE_TIMEOUT_MS),
             max_size: MAX_SIZE,
             expected_sha256: None,
         }
@@ -69,17 +83,12 @@ pub async fn download_file(
         .redirect(reqwest::redirect::Policy::limited(10))
         .build()?;
 
-    let deadline = tokio::time::Instant::now() + options.total_timeout;
-
     let result = async {
-        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-        if remaining.is_zero() {
-            return Err(DownloadError::Timeout);
-        }
-        // The Node implementation aborts the initial request after the idle
-        // timeout and bounds the whole operation by the total timeout.
+        // Wait for the first byte (response headers) with a dedicated timeout.
+        // A total-operation deadline is intentionally not used: large cores and
+        // geo assets may legitimately take longer than a few seconds to stream.
         let response = tokio::time::timeout(
-            remaining.min(options.idle_timeout),
+            options.first_byte_timeout,
             client.get(url).send(),
         )
         .await
@@ -102,15 +111,9 @@ pub async fn download_file(
         let mut size: u64 = 0;
 
         loop {
-            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-            if remaining.is_zero() {
-                return Err(DownloadError::Timeout);
-            }
-            let wait = remaining.min(options.idle_timeout);
-            let chunk = match tokio::time::timeout(wait, stream.next()).await {
+            let chunk = match tokio::time::timeout(options.idle_timeout, stream.next()).await {
                 Ok(Some(chunk)) => chunk?,
                 Ok(None) => break,
-                Err(_) if wait < remaining => return Err(DownloadError::Timeout),
                 Err(_) => return Err(DownloadError::Timeout),
             };
             size += chunk.len() as u64;
@@ -145,4 +148,30 @@ pub async fn download_file(
     }
 
     result
+}
+
+/// Download with a bounded number of retries. Each failed attempt is logged,
+/// then the download pauses before trying again.
+pub async fn download_file_with_retry(
+    url: &str,
+    path: impl AsRef<Path>,
+    options: DownloadOptions,
+) -> Result<DownloadResult, DownloadError> {
+    let path = path.as_ref().to_path_buf();
+    let attempts = RETRY_ATTEMPTS.max(1);
+
+    for attempt in 1..=attempts {
+        match download_file(url, &path, options.clone()).await {
+            Ok(result) => return Ok(result),
+            Err(error) if attempt < attempts && error.is_retryable() => {
+                tracing::warn!(
+                    "download {url} failed (attempt {attempt}/{attempts}): {error}; retrying in {RETRY_PAUSE_MS}ms"
+                );
+                tokio::time::sleep(Duration::from_millis(RETRY_PAUSE_MS)).await;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+
+    unreachable!("the retry loop always returns on the last attempt")
 }

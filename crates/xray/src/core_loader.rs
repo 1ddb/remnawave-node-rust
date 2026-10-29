@@ -1,18 +1,16 @@
 use std::path::Path;
-use std::time::Duration;
 
-use rw_core::download::{download_file, DownloadOptions};
+use crate::process::CORE_LINK;
+use rw_core::download::{download_file_with_retry, DownloadOptions};
 use rw_core::version::read_core_version;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::{error, info, warn};
 
-pub const CORE_LINK: &str = "/usr/local/bin/rw-core";
 pub const CORE_STOCK: &str = "/usr/local/bin/xray";
 pub const CORE_CUSTOM: &str = "/usr/local/bin/xray-custom";
 pub const CORE_STAGED: &str = "/usr/local/bin/xray-custom.staged";
 pub const CORE_MARKER: &str = "/usr/local/bin/.rw-core.json";
-pub const TOTAL_TIMEOUT_MS: u64 = 15_000;
 
 #[derive(Debug, Clone, Deserialize)]
 struct CoreSchema {
@@ -23,6 +21,14 @@ struct CoreSchema {
 struct CoreConfig {
     url: String,
     sha256: String,
+}
+
+impl CoreConfig {
+    fn is_valid(&self) -> bool {
+        self.url.starts_with("https://")
+            && self.sha256.len() == 64
+            && self.sha256.chars().all(|c| c.is_ascii_hexdigit())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,12 +66,8 @@ impl CoreLoader {
             return Ok(());
         };
 
-        if let Some(url) = core.url.strip_prefix("http://") {
-            warn!("Ignoring non-https core url: {url}");
-            return Ok(());
-        }
-        if !core.url.starts_with("https://") {
-            warn!("Ignoring non-https core url: {}", core.url);
+        if !core.is_valid() {
+            warn!("Invalid \"core\" section, skipped.");
             return Ok(());
         }
 
@@ -107,13 +109,12 @@ impl CoreLoader {
 
     async fn install(core: &CoreConfig) {
         let options = DownloadOptions {
-            total_timeout: Duration::from_millis(TOTAL_TIMEOUT_MS),
             expected_sha256: Some(core.sha256.to_lowercase()),
             ..Default::default()
         };
 
         let result = async {
-            let downloaded = download_file(&core.url, CORE_STAGED, options).await?;
+            let downloaded = download_file_with_retry(&core.url, CORE_STAGED, options).await?;
             set_executable(CORE_STAGED)?;
             let version = read_core_version(CORE_STAGED).await.map_err(|e| e.to_string())?;
             tokio::fs::rename(CORE_STAGED, CORE_CUSTOM).await?;
