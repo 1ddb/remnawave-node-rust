@@ -9,11 +9,12 @@ use rw_contract::errors;
 use rw_xray_rpc::stats_proto::Stat;
 
 use crate::error::ApiError;
+use crate::extract::ContractJson;
 use crate::state::AppState;
 
 pub async fn user_online_status(
     State(state): State<AppState>,
-    Json(body): Json<UserOnlineStatusRequest>,
+    ContractJson(body): ContractJson<UserOnlineStatusRequest>,
 ) -> Result<Json<UserOnlineStatusResponse>, ApiError> {
     let online = match state.xray.rpc_for_handler().await {
         Some(rpc) => rpc
@@ -31,7 +32,7 @@ pub async fn user_online_status(
 pub async fn users_stats(
     State(state): State<AppState>,
     uri: Uri,
-    Json(body): Json<ResetRequest>,
+    ContractJson(body): ContractJson<ResetRequest>,
 ) -> Result<Json<UsersStatsResponse>, ApiError> {
     let rpc = state
         .xray
@@ -75,7 +76,7 @@ pub async fn users_stats(
 pub async fn inbound_stats(
     State(state): State<AppState>,
     uri: Uri,
-    Json(body): Json<InboundStatsRequest>,
+    ContractJson(body): ContractJson<InboundStatsRequest>,
 ) -> Result<Json<InboundStatsResponse>, ApiError> {
     let rpc = state
         .xray
@@ -105,7 +106,7 @@ pub async fn inbound_stats(
 pub async fn outbound_stats(
     State(state): State<AppState>,
     uri: Uri,
-    Json(body): Json<OutboundStatsRequest>,
+    ContractJson(body): ContractJson<OutboundStatsRequest>,
 ) -> Result<Json<OutboundStatsResponse>, ApiError> {
     let rpc = state
         .xray
@@ -135,7 +136,7 @@ pub async fn outbound_stats(
 pub async fn all_inbounds_stats(
     State(state): State<AppState>,
     uri: Uri,
-    Json(body): Json<ResetRequest>,
+    ContractJson(body): ContractJson<ResetRequest>,
 ) -> Result<Json<AllInboundsStatsResponse>, ApiError> {
     let rpc = state
         .xray
@@ -165,7 +166,7 @@ pub async fn all_inbounds_stats(
 pub async fn all_outbounds_stats(
     State(state): State<AppState>,
     uri: Uri,
-    Json(body): Json<ResetRequest>,
+    ContractJson(body): ContractJson<ResetRequest>,
 ) -> Result<Json<AllOutboundsStatsResponse>, ApiError> {
     let rpc = state
         .xray
@@ -195,7 +196,7 @@ pub async fn all_outbounds_stats(
 pub async fn combined_stats(
     State(state): State<AppState>,
     uri: Uri,
-    Json(body): Json<ResetRequest>,
+    ContractJson(body): ContractJson<ResetRequest>,
 ) -> Result<Json<CombinedStatsResponse>, ApiError> {
     let rpc = state
         .xray
@@ -291,7 +292,7 @@ pub async fn system_stats(
 
 pub async fn user_ip_list(
     State(state): State<AppState>,
-    Json(body): Json<UserIpListRequest>,
+    ContractJson(body): ContractJson<UserIpListRequest>,
 ) -> Result<Json<UserIpListResponse>, ApiError> {
     let ips = match state.xray.rpc_for_handler().await {
         Some(rpc) => rpc
@@ -409,7 +410,7 @@ impl Drop for GeocheckGuard {
 pub async fn geocheck(
     State(state): State<AppState>,
     uri: Uri,
-    Json(body): Json<GeocheckRequest>,
+    ContractJson(body): ContractJson<GeocheckRequest>,
 ) -> Result<Json<GeocheckResponse>, ApiError> {
     use std::net::IpAddr;
     use std::sync::atomic::Ordering;

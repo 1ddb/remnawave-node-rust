@@ -4,7 +4,7 @@ use axum::http::header::{AUTHORIZATION, CONTENT_ENCODING, CONTENT_LENGTH};
 use axum::http::HeaderValue;
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+use jsonwebtoken::{decode, Algorithm, Validation};
 use serde_json::Value;
 
 use crate::error::ApiError;
@@ -22,15 +22,7 @@ pub async fn jwt_auth(State(state): State<AppState>, req: Request, next: Next) -
         return ApiError::unauthorized(req.uri()).into_response();
     };
 
-    let key = match DecodingKey::from_rsa_pem(state.config.jwt_public_key.as_bytes()) {
-        Ok(key) => key,
-        Err(e) => {
-            tracing::error!("Invalid JWT public key: {e}");
-            return ApiError::unauthorized(req.uri()).into_response();
-        }
-    };
-
-    match decode::<Value>(&token, &key, &jwt_validation()) {
+    match decode::<Value>(&token, &state.jwt_key, &state.jwt_validation) {
         Ok(_) => next.run(req).await,
         Err(e) => {
             tracing::error!(
@@ -43,7 +35,7 @@ pub async fn jwt_auth(State(state): State<AppState>, req: Request, next: Next) -
     }
 }
 
-fn jwt_validation() -> Validation {
+pub fn jwt_validation() -> Validation {
     let mut validation = Validation::new(Algorithm::RS256);
     validation.required_spec_claims.remove("exp");
     validation.validate_exp = true;

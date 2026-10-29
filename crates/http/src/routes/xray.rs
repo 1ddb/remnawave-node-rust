@@ -3,11 +3,12 @@ use axum::Json;
 use rw_contract::commands::*;
 use tracing::info;
 
+use crate::extract::ContractJson;
 use crate::state::AppState;
 
 pub async fn start(
     State(state): State<AppState>,
-    Json(body): Json<StartXrayRequest>,
+    ContractJson(body): ContractJson<StartXrayRequest>,
 ) -> Json<StartXrayResponse> {
     let data = state.xray.start_xray(body).await;
     Json(StartXrayResponse { response: data })

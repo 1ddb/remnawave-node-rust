@@ -5,6 +5,7 @@ use rw_contract::models::XrayWebhook;
 use serde_json::Value;
 use tracing::error;
 
+use crate::extract::ContractJson;
 use crate::state::AppState;
 
 pub async fn get_xray_config(State(state): State<AppState>) -> Json<Value> {
@@ -13,7 +14,7 @@ pub async fn get_xray_config(State(state): State<AppState>) -> Json<Value> {
 
 pub async fn webhook(
     State(state): State<AppState>,
-    Json(body): Json<Value>,
+    ContractJson(body): ContractJson<Value>,
 ) -> StatusCode {
     match serde_json::from_value::<XrayWebhook>(body) {
         Ok(webhook) => {

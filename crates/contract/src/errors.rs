@@ -5,6 +5,10 @@ pub struct ErrorDef {
     pub http_code: u16,
 }
 
+/// Fallback code used by the Node `HttpExceptionFilter` for errors that are
+/// not mapped to a known `Axxx` code (including request validation failures).
+pub const UNKNOWN_ERROR_CODE: &str = "E000";
+
 pub const INTERNAL_SERVER_ERROR: ErrorDef = ErrorDef {
     code: "A001",
     message: "Server error",

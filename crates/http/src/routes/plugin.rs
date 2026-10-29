@@ -2,11 +2,12 @@ use axum::extract::State;
 use axum::Json;
 use rw_contract::commands::*;
 
+use crate::extract::ContractJson;
 use crate::state::AppState;
 
 pub async fn sync(
     State(state): State<AppState>,
-    Json(body): Json<SyncRequest>,
+    ContractJson(body): ContractJson<SyncRequest>,
 ) -> Json<AcceptedResponse> {
     let accepted = state.xray.sync_plugins(body.plugin).await;
     Json(AcceptedResponse {
@@ -23,7 +24,7 @@ pub async fn collect_reports(State(state): State<AppState>) -> Json<TorrentBlock
 
 pub async fn block_ips(
     State(state): State<AppState>,
-    Json(body): Json<BlockIpsRequest>,
+    ContractJson(body): ContractJson<BlockIpsRequest>,
 ) -> Json<AcceptedResponse> {
     let ips = body.ips.into_iter().map(|ip| (ip.ip, ip.timeout)).collect();
     let accepted = state.xray.block_ips(ips).await;
@@ -34,7 +35,7 @@ pub async fn block_ips(
 
 pub async fn unblock_ips(
     State(state): State<AppState>,
-    Json(body): Json<UnblockIpsRequest>,
+    ContractJson(body): ContractJson<UnblockIpsRequest>,
 ) -> Json<AcceptedResponse> {
     let accepted = state.xray.unblock_ips(body.ips).await;
     Json(AcceptedResponse {

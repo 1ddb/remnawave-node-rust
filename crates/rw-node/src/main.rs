@@ -97,11 +97,13 @@ fn main() {
         let xray = Arc::new(xray);
         xray.start_watchdog();
 
-        let state = AppState {
-            config: config.clone(),
-            xray: xray.clone(),
-            network: network.clone(),
-            geocheck_running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        let state = match AppState::new(config.clone(), xray.clone(), network.clone()) {
+            Ok(state) => state,
+            Err(e) => {
+                error!("Invalid JWT public key: {e}");
+                xray.kill_all().await;
+                std::process::exit(1);
+            }
         };
 
         let start_message = build_start_message(&config, &xray, &network).await;
@@ -109,6 +111,8 @@ fn main() {
 
         if let Err(e) = serve(state, tls_config).await {
             error!("Server error: {e}");
+            xray.kill_all().await;
+            std::process::exit(1);
         }
 
         xray.kill_all().await;

@@ -5,6 +5,7 @@ use rw_contract::commands::*;
 use rw_core::capabilities::has_cap_net_admin;
 
 use crate::error::ApiError;
+use crate::extract::ContractJson;
 use crate::state::AppState;
 
 async fn user_ips(state: &AppState, user_id: &str) -> Option<Vec<String>> {
@@ -22,7 +23,7 @@ async fn user_ips(state: &AppState, user_id: &str) -> Option<Vec<String>> {
 pub async fn add_user(
     State(state): State<AppState>,
     uri: Uri,
-    Json(body): Json<AddUserRequest>,
+    ContractJson(body): ContractJson<AddUserRequest>,
 ) -> Result<Json<AddUserResponse>, ApiError> {
     let Some(first) = body.data.first() else {
         return Ok(Json(AddUserResponse {
@@ -147,7 +148,7 @@ pub async fn add_user(
 pub async fn remove_user(
     State(state): State<AppState>,
     uri: Uri,
-    Json(body): Json<RemoveUserRequest>,
+    ContractJson(body): ContractJson<RemoveUserRequest>,
 ) -> Result<Json<RemoveUserResponse>, ApiError> {
     let inbound_tags = state.xray.internal().get_xtls_config_inbounds().await;
     if inbound_tags.is_empty() {
@@ -206,7 +207,7 @@ pub async fn remove_user(
 pub async fn add_users(
     State(state): State<AppState>,
     uri: Uri,
-    Json(body): Json<AddUsersRequest>,
+    ContractJson(body): ContractJson<AddUsersRequest>,
 ) -> Result<Json<AddUsersResponse>, ApiError> {
     for tag in &body.affected_inbound_tags {
         state
@@ -309,7 +310,7 @@ pub async fn add_users(
 pub async fn remove_users(
     State(state): State<AppState>,
     uri: Uri,
-    Json(body): Json<RemoveUsersRequest>,
+    ContractJson(body): ContractJson<RemoveUsersRequest>,
 ) -> Result<Json<RemoveUsersResponse>, ApiError> {
     let inbound_tags = state.xray.internal().get_xtls_config_inbounds().await;
     if inbound_tags.is_empty() {
@@ -367,7 +368,7 @@ pub async fn remove_users(
 
 pub async fn drop_users_connections(
     State(state): State<AppState>,
-    Json(body): Json<DropUsersConnectionsRequest>,
+    ContractJson(body): ContractJson<DropUsersConnectionsRequest>,
 ) -> Result<Json<GenericSuccessResponse>, ApiError> {
     for user_id in &body.user_ids {
         if let Some(ips) = user_ips(&state, user_id).await {
@@ -381,7 +382,7 @@ pub async fn drop_users_connections(
 
 pub async fn drop_ips(
     State(state): State<AppState>,
-    Json(body): Json<DropIpsRequest>,
+    ContractJson(body): ContractJson<DropIpsRequest>,
 ) -> Result<Json<GenericSuccessResponse>, ApiError> {
     state.xray.drop_ips(body.ips).await;
     Ok(Json(GenericSuccessResponse {

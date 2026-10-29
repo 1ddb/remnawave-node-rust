@@ -5,8 +5,19 @@ use serde::Deserialize;
 use serde_json::Value;
 use tracing::{error, info, warn};
 
-pub const ASSETS_DIR: &str = "/usr/local/share/xray";
+pub const DEFAULT_ASSETS_DIR: &str = "/usr/local/share/xray";
+pub const ASSETS_DIR_ENV: &str = "XRAY_LOCATION_ASSET";
 pub const CONCURRENCY: usize = 5;
+
+/// Mirrors the Node `resolve(process.env.XRAY_LOCATION_ASSET || default)`.
+pub fn assets_dir() -> PathBuf {
+    let dir = std::env::var(ASSETS_DIR_ENV)
+        .ok()
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ASSETS_DIR));
+    std::path::absolute(&dir).unwrap_or(dir)
+}
 
 #[derive(Debug, Clone, Deserialize)]
 struct AssetsSchema {
@@ -45,13 +56,15 @@ impl Geodata {
         }
 
         let assets = parsed.assets;
+        let dir = assets_dir();
         // Await every chunk before starting the next one, otherwise `chunks`
         // only groups the tasks and all assets are fetched at once.
         for chunk in assets.chunks(CONCURRENCY.max(1)) {
             let mut join = Vec::new();
             for asset in chunk {
                 let asset = asset.clone();
-                join.push(tokio::spawn(async move { prepare_asset(asset).await }));
+                let dir = dir.clone();
+                join.push(tokio::spawn(async move { prepare_asset(asset, dir).await }));
             }
             for handle in join {
                 let _ = handle.await;
@@ -62,12 +75,12 @@ impl Geodata {
     }
 }
 
-async fn prepare_asset(asset: Asset) {
+async fn prepare_asset(asset: Asset, dir: PathBuf) {
     if !safe_file_name(&asset.file) {
         warn!("Invalid asset file name: {}", asset.file);
         return;
     }
-    let path = PathBuf::from(ASSETS_DIR).join(&asset.file);
+    let path = dir.join(&asset.file);
 
     if exists_nonempty(&path).await {
         return;
