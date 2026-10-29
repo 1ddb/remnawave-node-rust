@@ -388,10 +388,17 @@ impl XrayService {
         {
             return;
         }
+        let metadata = match metadata {
+            Some(metadata) => {
+                serde_json::to_value(metadata).unwrap_or_else(|_| serde_json::json!({}))
+            }
+            None => serde_json::json!({}),
+        };
         let body = serde_json::json!({
             "scope": "service",
             "event": "service.core_started",
-            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "timestamp": chrono::Utc::now()
+                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
             "metadata": metadata,
         });
         rw_core::webhook::send_webhook(&state.post_start.webhook_url, body);
@@ -673,8 +680,7 @@ impl XrayService {
                 .torrent_blocker
                 .as_ref()
                 .and_then(|t| t.rule_placement)
-                .unwrap_or(0.0)
-                .max(0.0) as u32;
+                .unwrap_or(0.0);
             (was_enabled != now_enabled)
                 || (still_enabled && previous.1 != new_tags)
                 || (still_enabled && previous.2 != new_position)

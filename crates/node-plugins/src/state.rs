@@ -24,7 +24,7 @@ pub struct TorrentBlockerState {
     pub ignored_users: HashSet<String>,
     pub include_rule_tags: HashSet<String>,
     pub webhook_url: Option<String>,
-    pub rule_position: u32,
+    pub rule_position: f64,
     pub reports: Vec<TorrentBlockerReport>,
 }
 
@@ -32,7 +32,7 @@ impl TorrentBlockerState {
     pub fn configure(&mut self, block_duration: i64, rule_position: Option<f64>) {
         self.enabled = true;
         self.block_duration = Some(block_duration);
-        self.rule_position = rule_position.unwrap_or(0.0).max(0.0) as u32;
+        self.rule_position = rule_position.unwrap_or(0.0);
     }
 
     pub fn is_ip_ignored(&self, ip: &str) -> bool {

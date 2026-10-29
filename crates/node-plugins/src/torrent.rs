@@ -72,14 +72,44 @@ pub fn extract_ip(source: Option<&str>) -> Option<String> {
         .or_else(|| source.strip_prefix("udp:"))
         .unwrap_or(source);
 
-    let candidate = if let Some(rest) = source.strip_prefix('[') {
-        rest.split(']').next().unwrap_or(rest)
-    } else {
-        match source.rsplit_once(':') {
-            Some((host, port)) if port.chars().all(|c| c.is_ascii_digit()) => host,
-            _ => source,
-        }
-    };
+    if let Some(rest) = source.strip_prefix('[') {
+        let (candidate, _) = rest.split_once(']')?;
+        return parse_ip(candidate);
+    }
 
-    candidate.parse::<IpAddr>().ok().map(|ip| ip.to_string())
+    if let Some((host, port)) = source.rsplit_once(':') {
+        if !host.is_empty() && !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()) {
+            if let Some(ip) = parse_ip(host) {
+                return Some(ip);
+            }
+        }
+    }
+
+    parse_ip(source)
+}
+
+fn parse_ip(candidate: &str) -> Option<String> {
+    candidate.parse::<IpAddr>().ok().map(|_| candidate.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracts_ip_preserving_the_original_text() {
+        assert_eq!(extract_ip(None), None);
+        assert_eq!(extract_ip(Some("")), None);
+        assert_eq!(extract_ip(Some("1.2.3.4")), Some("1.2.3.4".into()));
+        assert_eq!(extract_ip(Some("tcp:1.2.3.4:443")), Some("1.2.3.4".into()));
+        assert_eq!(extract_ip(Some("udp:1.2.3.4:443")), Some("1.2.3.4".into()));
+        assert_eq!(extract_ip(Some("[2001:db8::1]:443")), Some("2001:db8::1".into()));
+        assert_eq!(extract_ip(Some("tcp:[2001:db8::1]:443")), Some("2001:db8::1".into()));
+        assert_eq!(extract_ip(Some("2001:db8::1")), Some("2001:db8::1".into()));
+        assert_eq!(extract_ip(Some("::1")), Some("::1".into()));
+        assert_eq!(extract_ip(Some("tcp:2001:db8::1:443")), Some("2001:db8::1".into()));
+        assert_eq!(extract_ip(Some("2001:DB8:0:0:0:0:0:1")), Some("2001:DB8:0:0:0:0:0:1".into()));
+        assert_eq!(extract_ip(Some("not-an-ip:443")), None);
+        assert_eq!(extract_ip(Some("[2001:db8::1")), None);
+    }
 }

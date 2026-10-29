@@ -279,7 +279,7 @@ impl XrayRpc {
         )
         .await
         .map(|_| true)
-        .or_else(|err| if err.is_not_found() { Ok(false) } else { Err(err) })
+        .or_else(|err| if err.is_not_found() { Ok(true) } else { Err(err) })
     }
 
     async fn add_user(&self, tag: &str, user: User) -> Result<bool, RpcError> {
@@ -292,7 +292,7 @@ impl XrayRpc {
         .map(|_| true)
         .or_else(|err| {
             if err.is_already_exists() {
-                Ok(false)
+                Ok(true)
             } else {
                 Err(err)
             }

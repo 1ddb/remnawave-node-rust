@@ -12,7 +12,7 @@ pub const XRAY_INTERNAL_FULL_WEBHOOK_PATH: &str = "/internal/webhook";
 pub struct TorrentBlockerStateView {
     pub enabled: bool,
     pub include_rule_tags: HashSet<String>,
-    pub rule_position: u32,
+    pub rule_position: f64,
 }
 
 pub struct InternalView {
@@ -92,7 +92,7 @@ pub fn generate_api_config(
             .and_then(|r| r.get_mut("rules"))
             .and_then(Value::as_array_mut)
         {
-            let index = resolve_rule_index(torrent_blocker.rule_position as usize, rules.len());
+            let index = resolve_rule_index(torrent_blocker.rule_position, rules.len());
             rules.insert(index, rule);
 
             if !torrent_blocker.include_rule_tags.is_empty() {
@@ -117,12 +117,12 @@ pub fn generate_api_config(
     Value::Object(result)
 }
 
-fn resolve_rule_index(position: usize, rules_len: usize) -> usize {
+fn resolve_rule_index(position: f64, rules_len: usize) -> usize {
     let user_rules_count = rules_len.saturating_sub(1);
-    if position == 0 {
+    if !position.is_finite() || position.fract() != 0.0 || position <= 0.0 {
         return 1;
     }
-    1 + position.min(user_rules_count)
+    1 + (position as usize).min(user_rules_count)
 }
 
 fn build_webhook_url(internal: &InternalView) -> String {
@@ -154,7 +154,7 @@ mod tests {
         let state = TorrentBlockerStateView {
             enabled: false,
             include_rule_tags: Default::default(),
-            rule_position: 0,
+            rule_position: 0.0,
         };
         let result = generate_api_config(config, &state, &internal(), true);
         let inbounds = result["inbounds"].as_array().unwrap();
@@ -181,7 +181,7 @@ mod tests {
         let state = TorrentBlockerStateView {
             enabled: true,
             include_rule_tags: ["a".to_string()].into_iter().collect(),
-            rule_position: 1,
+            rule_position: 1.0,
         };
         let result = generate_api_config(config, &state, &internal(), false);
         let rules = result["routing"]["rules"].as_array().unwrap();
@@ -192,5 +192,16 @@ mod tests {
             result["outbounds"].as_array().unwrap().last().unwrap()["protocol"],
             "blackhole"
         );
+    }
+
+    #[test]
+    fn resolves_rule_index_like_node() {
+        assert_eq!(resolve_rule_index(0.0, 4), 1);
+        assert_eq!(resolve_rule_index(-1.0, 4), 1);
+        assert_eq!(resolve_rule_index(2.5, 4), 1);
+        assert_eq!(resolve_rule_index(f64::NAN, 4), 1);
+        assert_eq!(resolve_rule_index(f64::INFINITY, 4), 1);
+        assert_eq!(resolve_rule_index(1.0, 4), 2);
+        assert_eq!(resolve_rule_index(10.0, 4), 4);
     }
 }
