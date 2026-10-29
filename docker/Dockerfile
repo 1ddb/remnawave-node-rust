@@ -22,7 +22,7 @@ RUN --mount=type=cache,id=cargo-registry-${TARGETARCH},target=/usr/local/cargo/r
 
 FROM alpine:3.21 AS xray
 
-ARG XRAY_CORE_VERSION=v26.7.28
+ARG XRAY_CORE_VERSION=v26.10.21
 ARG UPSTREAM_REPO=XTLS
 ARG TARGETARCH
 
