@@ -1,0 +1,20 @@
+[package]
+name = "rw-xray"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+chrono.workspace = true
+rw-asn-lmdb = { path = "../asn-lmdb" }
+rw-contract = { path = "../contract" }
+rw-core = { path = "../core" }
+rw-hashed-set = { path = "../hashed-set" }
+rw-node-plugins = { path = "../node-plugins" }
+rw-xray-rpc = { path = "../xray-rpc" }
+serde.workspace = true
+sha2.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true

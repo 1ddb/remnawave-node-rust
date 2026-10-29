@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package xray.proxy.shadowsocks_2022;
+option go_package = "github.com/xtls/xray-core/proxy/shadowsocks_2022";
+option java_package = "com.xray.proxy.shadowsocks_2022";
+option java_multiple_files = true;
+
+message Account {
+  string key = 1;
+}

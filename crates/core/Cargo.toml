@@ -1,0 +1,18 @@
+[package]
+name = "rw-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+chrono.workspace = true
+futures-util.workspace = true
+libc.workspace = true
+rw-contract = { path = "../contract" }
+reqwest = { workspace = true, features = ["json"] }
+semver = "1"
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true

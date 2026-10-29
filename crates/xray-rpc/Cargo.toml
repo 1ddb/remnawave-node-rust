@@ -1,0 +1,18 @@
+[package]
+name = "rw-xray-rpc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+http.workspace = true
+hyper-util.workspace = true
+prost.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tower.workspace = true
+tonic.workspace = true
+
+[build-dependencies]
+protoc-bin-vendored = "3"
+tonic-build = "0.12"

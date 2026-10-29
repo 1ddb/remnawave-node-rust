@@ -1,0 +1,22 @@
+[package]
+name = "rw-node"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "rw-node"
+path = "src/main.rs"
+
+[dependencies]
+percent-encoding.workspace = true
+rw-asn-lmdb = { path = "../asn-lmdb" }
+rw-config = { path = "../config" }
+rw-core = { path = "../core" }
+rw-http = { path = "../http" }
+rw-xray = { path = "../xray" }
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
