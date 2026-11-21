@@ -3,7 +3,7 @@ set -eu
 
 dest="${1:?usage: $0 <destination-root>}"
 
-XRAY_CORE_VERSION="${XRAY_CORE_VERSION:-v26.10.31}"
+XRAY_CORE_VERSION="${XRAY_CORE_VERSION:-v26.11.9}"
 UPSTREAM_REPO="${UPSTREAM_REPO:-XTLS}"
 GEOCHECK_VERSION="${GEOCHECK_VERSION:-0.3.0}"
 ASN_LMDB_URL="${ASN_LMDB_URL:-https://github.com/remnawave/asn-index/releases/latest/download/asn-prefixes.lmdb.zst}"
