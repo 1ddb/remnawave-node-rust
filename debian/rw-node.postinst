@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    if grep -q '^SECRET_KEY=$' /etc/rw-node/env 2>/dev/null; then
+        echo "rw-node: set NODE_PORT and SECRET_KEY in /etc/rw-node/env, then run:" >&2
+        echo "rw-node:   systemctl enable --now rw-node" >&2
+    fi
+fi
+
+#DEBHELPER#
+
+exit 0

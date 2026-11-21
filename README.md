@@ -134,6 +134,27 @@ docker run -d \
   remnawave/node:rust
 ```
 
+## Debian package
+
+A `debian/` source package is included. It builds `rw-node` together with the
+bundled Xray core, geodata, ASN database and geocheck. The build downloads those
+artifacts from GitHub, so network access is required.
+
+```bash
+sudo apt install debhelper build-essential cargo rustc cmake curl perl unzip zstd
+dpkg-buildpackage -us -uc -b
+sudo apt install ./rw-node_*.deb
+sudoedit /etc/rw-node/env
+sudo systemctl enable --now rw-node
+```
+
+If `cargo`/`rustc` are installed through rustup rather than apt, pass `-d` to
+`dpkg-buildpackage` to skip the build-dependency check.
+
+The systemd unit reads `/etc/rw-node/env`. Runtime tokens and abstract socket
+names are still generated into `/run/rw-node.env`. The service is not enabled or
+started automatically during installation.
+
 ## Runtime files
 
 | Path | Purpose |

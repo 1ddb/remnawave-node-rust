@@ -1,0 +1,19 @@
+[Unit]
+Description=Remnawave Node
+Documentation=https://docs.rw
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/rw-node/env
+ExecStart=/usr/local/bin/rw-node
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=1048576
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

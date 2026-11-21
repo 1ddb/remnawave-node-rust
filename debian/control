@@ -1,0 +1,30 @@
+Source: rw-node
+Section: net
+Priority: optional
+Maintainer: Remnawave <support@remnawave.com>
+Build-Depends: debhelper-compat (= 13),
+               build-essential,
+               ca-certificates,
+               cargo,
+               cmake,
+               curl,
+               perl,
+               rustc (>= 1.85),
+               unzip,
+               zstd
+Standards-Version: 4.7.0
+Homepage: https://github.com/remnawave/node
+Rules-Requires-Root: no
+
+Package: rw-node
+Architecture: amd64 arm64
+Depends: ${misc:Depends},
+         ${shlibs:Depends},
+         ca-certificates,
+         iproute2
+Description: Remnawave Node
+ Rust agent for the Remnawave Panel. It supervises the Xray Core process and
+ exposes the Panel-compatible HTTPS and internal APIs.
+ .
+ The package bundles the Xray Core binary, geodata, the ASN prefix database and
+ the geocheck helper.

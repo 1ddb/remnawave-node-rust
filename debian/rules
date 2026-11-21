@@ -1,0 +1,38 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+export CARGO_TARGET_DIR = $(CURDIR)/debian/cargo-target
+
+XRAY_CORE_VERSION ?= v26.10.31
+UPSTREAM_REPO ?= XTLS
+GEOCHECK_VERSION ?= 0.3.0
+ASN_LMDB_URL ?= https://github.com/remnawave/asn-index/releases/latest/download/asn-prefixes.lmdb.zst
+export XRAY_CORE_VERSION UPSTREAM_REPO GEOCHECK_VERSION ASN_LMDB_URL
+
+%:
+	dh $@ --buildsystem=none --parallel
+
+override_dh_auto_clean:
+	rm -rf $(CARGO_TARGET_DIR)
+	dh_auto_clean
+
+override_dh_auto_build:
+	cargo build --release --locked --bin rw-node
+
+override_dh_auto_install:
+	install -Dm755 $(CARGO_TARGET_DIR)/release/rw-node debian/rw-node/usr/local/bin/rw-node
+	install -Dm600 debian/rw-node.env debian/rw-node/etc/rw-node/env
+	install -d debian/rw-node/usr/local/bin
+	ln -sf rw-node debian/rw-node/usr/local/bin/cli
+	ln -sf xray debian/rw-node/usr/local/bin/rw-core
+	install -d debian/rw-node/var/log/xray
+	debian/fetch-assets.sh debian/rw-node
+
+override_dh_installsystemd:
+	dh_installsystemd --no-start --no-enable
+
+override_dh_usrlocal:
+
+override_dh_fixperms:
+	dh_fixperms
+	chmod 600 debian/rw-node/etc/rw-node/env
