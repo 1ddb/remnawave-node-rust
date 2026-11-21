@@ -1,8 +1,8 @@
 # Remnawave Node (Rust)
 
 Rust reimplementation of [`remnawave/node`](https://github.com/remnawave/node),
-API-compatible with `node` 3.4.3. This is the agent that runs on every node and
-is controlled by the Remnawave Panel.
+API-compatible with `node` 3.4.3 (upstream commit `2ad154f`). This is the agent
+that runs on every node and is controlled by the Remnawave Panel.
 
 ## Node.js vs Rust
 

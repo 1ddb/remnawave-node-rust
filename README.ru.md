@@ -1,8 +1,8 @@
 # Remnawave Node (Rust)
 
 Rust-реимплементация [`remnawave/node`](https://github.com/remnawave/node),
-совместимая по API с `node` 3.4.3. Это агент, который запускается на каждой ноде
-и управляется панелью Remnawave.
+совместимая по API с `node` 3.4.3 (upstream-коммит `2ad154f`). Это агент, который
+запускается на каждой ноде и управляется панелью Remnawave.
 
 ## Node.js vs Rust
 
