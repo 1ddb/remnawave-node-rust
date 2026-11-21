@@ -4,6 +4,22 @@ Rust reimplementation of [`remnawave/node`](https://github.com/remnawave/node),
 API-compatible with `node` 3.4.3. This is the agent that runs on every node and
 is controlled by the Remnawave Panel.
 
+## Node.js vs Rust
+
+A drop-in reimplementation of the upstream Node.js agent:
+
+| Metric | Node.js (upstream) | Rust (this project) |
+|---|---|---|
+| Language | TypeScript / Node.js | Rust |
+| Memory | ~107 MiB | ~6 MiB |
+| Image, disk | 510 MB | 177 MB |
+| Image, content | 124 MB | 87.9 MB |
+| CPU idle | 0.0% | 0.0% |
+
+The Rust agent uses roughly **17x less resident memory** than the Node.js one,
+and the Docker image is about **2.9x smaller on disk** and **1.4x smaller in
+content size**.
+
 ## Features
 
 - Public HTTPS API with mutual TLS, optional SNI verification and JWT (RS256)
