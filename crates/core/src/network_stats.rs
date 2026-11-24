@@ -53,9 +53,7 @@ pub struct NetworkStats {
 
 impl NetworkStats {
     pub fn new() -> Self {
-        Self {
-            inner: Arc::new(RwLock::new(Inner::default())),
-        }
+        Self { inner: Arc::new(RwLock::new(Inner::default())) }
     }
 
     pub async fn start(&self) {
@@ -128,10 +126,7 @@ impl NetworkStats {
 
     pub async fn get_default(&self) -> Option<InterfaceRate> {
         let inner = self.inner.read().await;
-        inner
-            .default_iface
-            .as_ref()
-            .and_then(|name| inner.rates.get(name).cloned())
+        inner.default_iface.as_ref().and_then(|name| inner.rates.get(name).cloned())
     }
 
     pub async fn get_by_interface(&self, name: &str) -> Option<InterfaceRate> {
@@ -151,10 +146,8 @@ impl Default for NetworkStats {
 
 fn read_proc_net_dev() -> HashMap<String, (u64, u64, i64)> {
     let mut result = HashMap::new();
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0);
+    let timestamp =
+        SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0);
 
     let Ok(content) = std::fs::read_to_string("/proc/net/dev") else {
         error!("Failed to read /proc/net/dev");
@@ -199,7 +192,7 @@ fn resolve_default_interface() -> Option<String> {
             continue;
         }
         let metric = fields[6].parse::<u64>().unwrap_or(0);
-        if best.as_ref().map_or(true, |(_, m)| metric < *m) {
+        if best.as_ref().is_none_or(|(_, m)| metric < *m) {
             best = Some((iface.to_string(), metric));
         }
     }

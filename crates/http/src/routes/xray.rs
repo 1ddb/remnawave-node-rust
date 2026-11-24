@@ -17,9 +17,7 @@ pub async fn start(
 pub async fn stop(State(state): State<AppState>) -> Json<StopXrayResponse> {
     info!("Remnawave requested to stop Xray.");
     let is_stopped = state.xray.stop_xray(true, false).await;
-    Json(StopXrayResponse {
-        response: StopXrayResponseData { is_stopped },
-    })
+    Json(StopXrayResponse { response: StopXrayResponseData { is_stopped } })
 }
 
 pub async fn healthcheck(State(state): State<AppState>) -> Json<NodeHealthCheckResponse> {

@@ -61,16 +61,10 @@ pub async fn users_stats(
     let users = map
         .into_iter()
         .filter(|(_, (up, down))| *up != 0 || *down != 0)
-        .map(|(username, (up, down))| UserStat {
-            username,
-            uplink: up,
-            downlink: down,
-        })
+        .map(|(username, (up, down))| UserStat { username, uplink: up, downlink: down })
         .collect();
 
-    Ok(Json(UsersStatsResponse {
-        response: UsersStatsResponseData { users },
-    }))
+    Ok(Json(UsersStatsResponse { response: UsersStatsResponseData { users } }))
 }
 
 pub async fn inbound_stats(
@@ -95,11 +89,7 @@ pub async fn inbound_stats(
 
     let (up, down) = aggregate(stats);
     Ok(Json(InboundStatsResponse {
-        response: InboundStatsResponseData {
-            inbound: body.tag,
-            downlink: down,
-            uplink: up,
-        },
+        response: InboundStatsResponseData { inbound: body.tag, downlink: down, uplink: up },
     }))
 }
 
@@ -125,11 +115,7 @@ pub async fn outbound_stats(
 
     let (up, down) = aggregate(stats);
     Ok(Json(OutboundStatsResponse {
-        response: OutboundStatsResponseData {
-            outbound: body.tag,
-            downlink: down,
-            uplink: up,
-        },
+        response: OutboundStatsResponseData { outbound: body.tag, downlink: down, uplink: up },
     }))
 }
 
@@ -151,16 +137,10 @@ pub async fn all_inbounds_stats(
 
     let inbounds = aggregate_by(stats, "inbound")
         .into_iter()
-        .map(|(inbound, (uplink, downlink))| InboundStat {
-            inbound,
-            downlink,
-            uplink,
-        })
+        .map(|(inbound, (uplink, downlink))| InboundStat { inbound, downlink, uplink })
         .collect();
 
-    Ok(Json(AllInboundsStatsResponse {
-        response: AllInboundsStatsResponseData { inbounds },
-    }))
+    Ok(Json(AllInboundsStatsResponse { response: AllInboundsStatsResponseData { inbounds } }))
 }
 
 pub async fn all_outbounds_stats(
@@ -181,16 +161,10 @@ pub async fn all_outbounds_stats(
 
     let outbounds = aggregate_by(stats, "outbound")
         .into_iter()
-        .map(|(outbound, (uplink, downlink))| OutboundStat {
-            outbound,
-            downlink,
-            uplink,
-        })
+        .map(|(outbound, (uplink, downlink))| OutboundStat { outbound, downlink, uplink })
         .collect();
 
-    Ok(Json(AllOutboundsStatsResponse {
-        response: AllOutboundsStatsResponseData { outbounds },
-    }))
+    Ok(Json(AllOutboundsStatsResponse { response: AllOutboundsStatsResponseData { outbounds } }))
 }
 
 pub async fn combined_stats(
@@ -215,27 +189,14 @@ pub async fn combined_stats(
 
     let inbounds = aggregate_by(inbounds_stats, "inbound")
         .into_iter()
-        .map(|(inbound, (uplink, downlink))| InboundStat {
-            inbound,
-            downlink,
-            uplink,
-        })
+        .map(|(inbound, (uplink, downlink))| InboundStat { inbound, downlink, uplink })
         .collect();
     let outbounds = aggregate_by(outbounds_stats, "outbound")
         .into_iter()
-        .map(|(outbound, (uplink, downlink))| OutboundStat {
-            outbound,
-            downlink,
-            uplink,
-        })
+        .map(|(outbound, (uplink, downlink))| OutboundStat { outbound, downlink, uplink })
         .collect();
 
-    Ok(Json(CombinedStatsResponse {
-        response: CombinedStatsResponseData {
-            inbounds,
-            outbounds,
-        },
-    }))
+    Ok(Json(CombinedStatsResponse { response: CombinedStatsResponseData { inbounds, outbounds } }))
 }
 
 pub async fn system_stats(
@@ -253,11 +214,7 @@ pub async fn system_stats(
         .await
         .map_err(|e| ApiError::new(&uri, errors::FAILED_TO_GET_SYSTEM_STATS, Some(e.message)))?;
 
-    let interface = state
-        .network
-        .get_default()
-        .await
-        .map(|r| r.to_contract());
+    let interface = state.network.get_default().await.map(|r| r.to_contract());
 
     let mut stats = rw_core::system_stats::get_system_stats();
     stats.interface = interface;
@@ -282,9 +239,7 @@ pub async fn system_stats(
                 pause_total_ns: sys.pause_total_ns,
                 uptime: sys.uptime,
             }),
-            plugins: PluginStats {
-                torrent_blocker: TorrentBlockerPluginStats { reports_count },
-            },
+            plugins: PluginStats { torrent_blocker: TorrentBlockerPluginStats { reports_count } },
             system: SystemStatsInner { stats },
         },
     }))
@@ -311,12 +266,12 @@ pub async fn user_ip_list(
         .collect();
     ips.sort_by(|a, b| b.last_seen.cmp(&a.last_seen));
 
-    Ok(Json(UserIpListResponse {
-        response: UserIpListResponseData { ips },
-    }))
+    Ok(Json(UserIpListResponse { response: UserIpListResponseData { ips } }))
 }
 
-pub async fn users_ip_list(State(state): State<AppState>) -> Result<Json<UsersIpListResponse>, ApiError> {
+pub async fn users_ip_list(
+    State(state): State<AppState>,
+) -> Result<Json<UsersIpListResponse>, ApiError> {
     let users = match state.xray.rpc_for_handler().await {
         Some(rpc) => rpc
             .get_users_stats(false, false)
@@ -339,9 +294,7 @@ pub async fn users_ip_list(State(state): State<AppState>) -> Result<Json<UsersIp
         None => Vec::new(),
     };
 
-    Ok(Json(UsersIpListResponse {
-        response: UsersIpListResponseData { users },
-    }))
+    Ok(Json(UsersIpListResponse { response: UsersIpListResponseData { users } }))
 }
 
 /// Splits an Xray traffic metric name such as
@@ -416,11 +369,7 @@ pub async fn geocheck(
     use std::sync::atomic::Ordering;
 
     let ip = body.ip.as_deref().map(str::trim).filter(|s| !s.is_empty());
-    let iface = body
-        .interface
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty());
+    let iface = body.interface.as_deref().map(str::trim).filter(|s| !s.is_empty());
 
     let bind_to = if let Some(ip) = ip {
         if ip.parse::<IpAddr>().is_err() {
@@ -484,9 +433,7 @@ async fn run_geocheck(bind_to: Option<String>, target: &str) -> Result<Vec<u8>, 
         .stderr(Stdio::piped())
         .kill_on_drop(true);
 
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("Geocheck via {target} failed: {e}"))?;
+    let mut child = cmd.spawn().map_err(|e| format!("Geocheck via {target} failed: {e}"))?;
     let stdout = child
         .stdout
         .take()
@@ -504,21 +451,19 @@ async fn run_geocheck(bind_to: Option<String>, target: &str) -> Result<Vec<u8>, 
         )
     };
 
-    let (stdout_res, stderr_res, status_res) = match tokio::time::timeout(
-        std::time::Duration::from_millis(GEOCHECK_TIMEOUT_MS),
-        work,
-    )
-    .await
-    {
-        Ok(result) => result,
-        Err(_) => {
-            let _ = child.kill().await;
-            let _ = child.wait().await;
-            return Err(format!(
-                "Geocheck via {target} exceeded {GEOCHECK_TIMEOUT_MS}ms and was killed."
-            ));
-        }
-    };
+    let (stdout_res, stderr_res, status_res) =
+        match tokio::time::timeout(std::time::Duration::from_millis(GEOCHECK_TIMEOUT_MS), work)
+            .await
+        {
+            Ok(result) => result,
+            Err(_) => {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                return Err(format!(
+                    "Geocheck via {target} exceeded {GEOCHECK_TIMEOUT_MS}ms and was killed."
+                ));
+            }
+        };
 
     let (stdout, stdout_exceeded) =
         stdout_res.map_err(|e| format!("Geocheck via {target} failed: {e}"))?;
@@ -564,10 +509,7 @@ mod tests {
     use super::*;
 
     fn stat(name: &str, value: i64) -> Stat {
-        Stat {
-            name: name.to_string(),
-            value,
-        }
+        Stat { name: name.to_string(), value }
     }
 
     #[test]

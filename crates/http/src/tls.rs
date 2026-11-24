@@ -1,11 +1,11 @@
 use std::io::BufReader;
 use std::sync::Arc;
 
-use rw_config::{ensure_crypto_provider, SniVerifier};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::server::{ClientHello, ResolvesServerCert, WebPkiClientVerifier};
 use rustls::sign::CertifiedKey;
 use rustls::{RootCertStore, ServerConfig};
+use rw_config::{ensure_crypto_provider, SniVerifier};
 
 #[derive(Debug, thiserror::Error)]
 pub enum TlsError {
@@ -32,9 +32,7 @@ pub fn build_server_config(
 
     let mut roots = RootCertStore::empty();
     for cert in ca_certs {
-        roots
-            .add(cert)
-            .map_err(|e| TlsError::Certificate(e.to_string()))?;
+        roots.add(cert).map_err(|e| TlsError::Certificate(e.to_string()))?;
     }
 
     let verifier = WebPkiClientVerifier::builder(Arc::new(roots))
@@ -54,9 +52,7 @@ pub fn build_server_config(
         });
         builder.with_cert_resolver(resolver)
     } else {
-        builder
-            .with_single_cert(node_certs, key)
-            .map_err(|e| TlsError::Rustls(e.to_string()))?
+        builder.with_single_cert(node_certs, key).map_err(|e| TlsError::Rustls(e.to_string()))?
     };
 
     Ok(Arc::new(config))

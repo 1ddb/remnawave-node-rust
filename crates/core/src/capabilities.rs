@@ -5,10 +5,7 @@ pub fn has_cap_net_admin() -> bool {
     let Ok(status) = std::fs::read_to_string("/proc/self/status") else {
         return false;
     };
-    let Some(eff) = status
-        .lines()
-        .find_map(|line| line.strip_prefix("CapEff:"))
-        .map(str::trim)
+    let Some(eff) = status.lines().find_map(|line| line.strip_prefix("CapEff:")).map(str::trim)
     else {
         return false;
     };

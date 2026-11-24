@@ -46,11 +46,8 @@ impl InternalService {
         info!("▸ Empty Config Hash: {}", hashes.empty_config);
 
         let valid_tags: HashSet<&str> = hashes.inbounds.iter().map(|i| i.tag.as_str()).collect();
-        let remote_hash_by_tag: HashMap<&str, &str> = hashes
-            .inbounds
-            .iter()
-            .map(|i| (i.tag.as_str(), i.hash.as_str()))
-            .collect();
+        let remote_hash_by_tag: HashMap<&str, &str> =
+            hashes.inbounds.iter().map(|i| (i.tag.as_str(), i.hash.as_str())).collect();
 
         if let Some(inbounds) = new_config.get("inbounds").and_then(Value::as_array) {
             for inbound in inbounds {
@@ -62,10 +59,8 @@ impl InternalService {
                 }
 
                 let mut users = HashedSet::new();
-                if let Some(clients) = inbound
-                    .get("settings")
-                    .and_then(|s| s.get("clients"))
-                    .and_then(Value::as_array)
+                if let Some(clients) =
+                    inbound.get("settings").and_then(|s| s.get("clients")).and_then(Value::as_array)
                 {
                     for client in clients {
                         if let Some(id) = client.get("id").and_then(Value::as_str) {
@@ -165,11 +160,7 @@ impl InternalService {
     }
 
     pub async fn add_xtls_config_inbound(&self, inbound_tag: &str) {
-        self.inner
-            .lock()
-            .await
-            .xtls_config_inbounds
-            .insert(inbound_tag.to_string());
+        self.inner.lock().await.xtls_config_inbounds.insert(inbound_tag.to_string());
     }
 
     pub async fn cleanup(&self) {

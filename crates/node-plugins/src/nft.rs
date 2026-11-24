@@ -44,11 +44,7 @@ pub struct NftManager {
 
 impl NftManager {
     pub fn new(logging: bool, accept_reply_traffic: bool) -> Self {
-        Self {
-            logging,
-            accept_reply_traffic,
-            available: false,
-        }
+        Self { logging, accept_reply_traffic, available: false }
     }
 
     pub fn is_available(&self) -> bool {
@@ -147,28 +143,18 @@ fn table_block(
     let ingress = format!("{INGRESS_FILTER_IP_SET_NAME}{suffix}");
     let egress_ip = format!("{EGRESS_FILTER_IP_SET_NAME}{suffix}");
     let egress_port = format!("{EGRESS_FILTER_PORT_SET_NAME}{suffix}");
-    let addr_type = if suffix.is_empty() {
-        "ipv4_addr"
-    } else {
-        "ipv6_addr"
-    };
+    let addr_type = if suffix.is_empty() { "ipv4_addr" } else { "ipv6_addr" };
     let saddr = if suffix.is_empty() { "ip saddr" } else { "ip6 saddr" };
     let daddr = if suffix.is_empty() { "ip daddr" } else { "ip6 daddr" };
 
     let ingress_rule = |set: &str| {
         if logging {
-            format!(
-                "    {saddr} @{set} log prefix \"{set}: \" counter name \"{set}\" drop\n"
-            )
+            format!("    {saddr} @{set} log prefix \"{set}: \" counter name \"{set}\" drop\n")
         } else {
             format!("    {saddr} @{set} counter name \"{set}\" drop\n")
         }
     };
-    let reply_rule = if accept_reply_traffic {
-        "    ct direction reply accept\n"
-    } else {
-        ""
-    };
+    let reply_rule = if accept_reply_traffic { "    ct direction reply accept\n" } else { "" };
 
     let mut script = String::new();
     script.push_str(&format!("table {family_name} {table} {{\n"));
@@ -190,9 +176,7 @@ fn table_block(
     script.push_str(&format!(
         "  chain {CHAIN_INPUT} {{\n    type filter hook input priority -10; policy accept;\n"
     ));
-    script.push_str(&format!(
-        "    counter name \"{PROCESSED_COUNTER}\"\n{reply_rule}"
-    ));
+    script.push_str(&format!("    counter name \"{PROCESSED_COUNTER}\"\n{reply_rule}"));
     script.push_str(&ingress_rule(&ingress));
     script.push_str(&ingress_rule(&torrent));
     script.push_str("  }\n");
@@ -200,9 +184,7 @@ fn table_block(
     script.push_str(&format!(
         "  chain {CHAIN_FORWARD} {{\n    type filter hook forward priority -10; policy accept;\n"
     ));
-    script.push_str(&format!(
-        "    counter name \"{PROCESSED_COUNTER}\"\n{reply_rule}"
-    ));
+    script.push_str(&format!("    counter name \"{PROCESSED_COUNTER}\"\n{reply_rule}"));
     script.push_str(&ingress_rule(&ingress));
     script.push_str(&ingress_rule(&torrent));
     script.push_str("  }\n");
@@ -210,9 +192,7 @@ fn table_block(
     script.push_str(&format!(
         "  chain {CHAIN_OUTPUT} {{\n    type filter hook output priority -10; policy accept;\n"
     ));
-    script.push_str(&format!(
-        "    {daddr} @{egress_ip} counter name \"{egress_ip}\" drop\n"
-    ));
+    script.push_str(&format!("    {daddr} @{egress_ip} counter name \"{egress_ip}\" drop\n"));
     script.push_str(&format!(
         "    meta l4proto . th dport @{egress_port} counter name \"{egress_port}\" drop\n"
     ));
@@ -243,9 +223,7 @@ fn build_address_elements(
             Some((Family::Ipv4, start, end)) => v4.push((start, end)),
             Some((Family::Ipv6, start, end)) => v6.push((start, end)),
             _ => {
-                return Err(NftError::Command(format!(
-                    "invalid IP address or CIDR: {value}"
-                )));
+                return Err(NftError::Command(format!("invalid IP address or CIDR: {value}")));
             }
         }
     }
@@ -290,8 +268,8 @@ fn push_address_elements(
             .ok_or_else(|| NftError::Command("address outside its family".into()))?;
         let end = family_bytes(family, end)
             .ok_or_else(|| NftError::Command("address outside its family".into()))?;
-        let mut range = SetElem::range(&start, &end, None)
-            .map_err(|e| NftError::Command(e.to_string()))?;
+        let mut range =
+            SetElem::range(&start, &end, None).map_err(|e| NftError::Command(e.to_string()))?;
         if let Some(timeout) = timeout {
             for element in &mut range {
                 if !element.is_interval_end() {
@@ -381,10 +359,7 @@ fn delete_elements_sync(elements: Vec<Elements>) -> Result<(), NftError> {
             // Node ignores ENOENT for removals, so a missing element must not
             // make unblock/recreate operations fail.
             if let Err(e) = socket.commit(&transaction) {
-                warn!(
-                    "Failed to remove element from {}.{}: {e}",
-                    batch.table, batch.set
-                );
+                warn!("Failed to remove element from {}.{}: {e}", batch.table, batch.set);
             }
         }
     }
@@ -430,10 +405,7 @@ fn delete_existing_tables(socket: &mut Socket) -> Result<(), NftError> {
         // Legacy table created by older rw-node builds.
         (Family::Inet, TABLE_NAME),
     ] {
-        let exists = socket
-            .list_tables(family)?
-            .iter()
-            .any(|table| table.name == name);
+        let exists = socket.list_tables(family)?.iter().any(|table| table.name == name);
         if !exists {
             continue;
         }
@@ -466,11 +438,7 @@ fn parse_ip_or_cidr(value: &str) -> Option<(Family, u128, u128)> {
                 if prefix > 32 {
                     return None;
                 }
-                let mask = if prefix == 0 {
-                    0
-                } else {
-                    u32::MAX << (32 - prefix)
-                };
+                let mask = if prefix == 0 { 0 } else { u32::MAX << (32 - prefix) };
                 let start = u32::from(ip) & mask;
                 let end = start | !mask;
                 Some((Family::Ipv4, start as u128, end as u128))
@@ -479,11 +447,7 @@ fn parse_ip_or_cidr(value: &str) -> Option<(Family, u128, u128)> {
                 if prefix > 128 {
                     return None;
                 }
-                let mask = if prefix == 0 {
-                    0
-                } else {
-                    u128::MAX << (128 - prefix)
-                };
+                let mask = if prefix == 0 { 0 } else { u128::MAX << (128 - prefix) };
                 let start = u128::from(ip) & mask;
                 let end = start | !mask;
                 Some((Family::Ipv6, start, end))
@@ -523,9 +487,9 @@ fn merge_ranges(mut ranges: Vec<(u128, u128)>, max: u128) -> Vec<(u128, u128)> {
 
 fn family_bytes(family: Family, value: u128) -> Option<Vec<u8>> {
     match family {
-        Family::Ipv4 => u32::try_from(value)
-            .ok()
-            .map(|value| Ipv4Addr::from(value).octets().to_vec()),
+        Family::Ipv4 => {
+            u32::try_from(value).ok().map(|value| Ipv4Addr::from(value).octets().to_vec())
+        }
         Family::Ipv6 => Some(Ipv6Addr::from(value).octets().to_vec()),
         _ => None,
     }
@@ -552,38 +516,20 @@ mod tests {
 
     #[test]
     fn parses_and_merges_cidrs() {
-        assert_eq!(
-            parse_ip_or_cidr("10.0.0.0/24"),
-            Some((Family::Ipv4, 0x0a00_0000, 0x0a00_00ff))
-        );
-        assert_eq!(
-            parse_ip_or_cidr("10.0.0.1"),
-            Some((Family::Ipv4, 0x0a00_0001, 0x0a00_0001))
-        );
+        assert_eq!(parse_ip_or_cidr("10.0.0.0/24"), Some((Family::Ipv4, 0x0a00_0000, 0x0a00_00ff)));
+        assert_eq!(parse_ip_or_cidr("10.0.0.1"), Some((Family::Ipv4, 0x0a00_0001, 0x0a00_0001)));
         assert!(parse_ip_or_cidr("1.2.3.4/8 } flush ruleset").is_none());
         assert!(parse_ip_or_cidr("2001:db8::/129").is_none());
 
-        let merged = merge_ranges(
-            vec![
-                (1, 5),
-                (6, 10),
-                (20, 30),
-                (25, 40),
-                (45, 50),
-            ],
-            u32::MAX as u128,
-        );
+        let merged =
+            merge_ranges(vec![(1, 5), (6, 10), (20, 30), (25, 40), (45, 50)], u32::MAX as u128);
         assert_eq!(merged, vec![(1, 10), (20, 40), (45, 50)]);
     }
 
     #[test]
     fn builds_v4_and_v6_address_elements() {
         let elements = build_address_elements(
-            &[
-                "10.0.0.0/24".to_string(),
-                "10.0.0.128/25".to_string(),
-                "2001:db8::/64".to_string(),
-            ],
+            &["10.0.0.0/24".to_string(), "10.0.0.128/25".to_string(), "2001:db8::/64".to_string()],
             TORRENT_BLOCKER_SET_NAME,
             Some(Duration::from_secs(60)),
         )

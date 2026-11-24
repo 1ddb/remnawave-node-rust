@@ -46,9 +46,7 @@ fn resolve_pattern(pattern: &str) -> Vec<String> {
                 matches.push(entry.to_string_lossy().into_owned());
             }
         }
-        Err(e) => warn!(
-            "[PRE-START] Cleanup Sockets: failed to expand pattern \"{pattern}\": {e}"
-        ),
+        Err(e) => warn!("[PRE-START] Cleanup Sockets: failed to expand pattern \"{pattern}\": {e}"),
     }
     matches
 }

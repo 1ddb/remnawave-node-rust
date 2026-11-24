@@ -26,10 +26,7 @@ pub async fn handle_webhook(
     let block_duration = state.block_duration?;
     let mut blocked = false;
 
-    match nft
-        .add_address(&ip, TORRENT_BLOCKER_SET_NAME, Some(block_duration))
-        .await
-    {
+    match nft.add_address(&ip, TORRENT_BLOCKER_SET_NAME, Some(block_duration)).await {
         Ok(()) => {
             blocked = true;
             info!(
@@ -67,10 +64,8 @@ pub async fn handle_webhook(
 
 pub fn extract_ip(source: Option<&str>) -> Option<String> {
     let source = source?;
-    let source = source
-        .strip_prefix("tcp:")
-        .or_else(|| source.strip_prefix("udp:"))
-        .unwrap_or(source);
+    let source =
+        source.strip_prefix("tcp:").or_else(|| source.strip_prefix("udp:")).unwrap_or(source);
 
     if let Some(rest) = source.strip_prefix('[') {
         let (candidate, _) = rest.split_once(']')?;

@@ -14,8 +14,8 @@ use rw_core::network_stats::NetworkStats;
 use rw_core::system_stats;
 use rw_node_plugins::connection_drop;
 use rw_node_plugins::nft::{
-    NftManager, EGRESS_FILTER_IP_SET_NAME, EGRESS_FILTER_PORT_SET_NAME,
-    INGRESS_FILTER_IP_SET_NAME, TORRENT_BLOCKER_SET_NAME,
+    NftManager, EGRESS_FILTER_IP_SET_NAME, EGRESS_FILTER_PORT_SET_NAME, INGRESS_FILTER_IP_SET_NAME,
+    TORRENT_BLOCKER_SET_NAME,
 };
 use rw_node_plugins::pre_start;
 use rw_node_plugins::schema::NodePlugin;
@@ -30,7 +30,7 @@ use crate::api_config::{generate_api_config, InternalView, TorrentBlockerStateVi
 use crate::core_loader::CoreLoader;
 use crate::geodata::Geodata;
 use crate::internal_service::InternalService;
-use crate::process::{CORE_LINK, ProcessEvent, ProcessStatus, XrayProcess, XRAY_LOG_FILE};
+use crate::process::{ProcessEvent, ProcessStatus, XrayProcess, CORE_LINK, XRAY_LOG_FILE};
 
 pub struct XrayServiceConfig {
     pub internal_socket_path: String,
@@ -74,7 +74,8 @@ impl XrayService {
             &config.internal_rest_token,
         );
 
-        let mut nft = NftManager::new(config.nftables_logging, config.nftables_accept_reply_traffic);
+        let mut nft =
+            NftManager::new(config.nftables_logging, config.nftables_accept_reply_traffic);
         let mut state = PluginState::new();
 
         if has_cap_net_admin() {
@@ -177,20 +178,14 @@ impl XrayService {
         self.handled_generation.store(generation, Ordering::SeqCst);
         self.is_xray_online.store(true, Ordering::SeqCst);
         self.refresh_xray_version().await;
-        info!(
-            "✔ XRay Core v{:?} is up after supervisor restart.",
-            *self.xray_version.read().await
-        );
+        info!("✔ XRay Core v{:?} is up after supervisor restart.", *self.xray_version.read().await);
 
         let metadata = self.last_metadata.read().await.clone();
         self.run_post_start(&metadata).await;
     }
 
     pub async fn get_xray_info(&self) -> (Option<String>, String) {
-        (
-            self.xray_version.read().await.clone(),
-            CORE_LINK.to_string(),
-        )
+        (self.xray_version.read().await.clone(), CORE_LINK.to_string())
     }
 
     async fn refresh_xray_version(&self) {
@@ -225,9 +220,7 @@ impl XrayService {
             };
         }
 
-        let result = self
-            .start_xray_inner(&body, system)
-            .await;
+        let result = self.start_xray_inner(&body, system).await;
         self.is_started_processing.store(false, Ordering::SeqCst);
         result
     }
@@ -237,9 +230,8 @@ impl XrayService {
         body: &StartXrayRequest,
         system: StartXraySystem,
     ) -> StartXrayResponseData {
-        let node_information = rw_contract::commands::NodeInformation {
-            version: Some(self.node_version.clone()),
-        };
+        let node_information =
+            rw_contract::commands::NodeInformation { version: Some(self.node_version.clone()) };
 
         *self.last_metadata.write().await = body.internals.metadata.clone();
 
@@ -290,17 +282,10 @@ impl XrayService {
             has_cap_net_admin(),
         );
 
-        self.internal
-            .debug_hashes(&body.internals.hashes)
-            .await;
-        self.internal
-            .extract_users_from_config(&body.internals.hashes, &full_config)
-            .await;
+        self.internal.debug_hashes(&body.internals.hashes).await;
+        self.internal.extract_users_from_config(&body.internals.hashes, &full_config).await;
 
-        let geodata = full_config
-            .get("geodata")
-            .cloned()
-            .unwrap_or(Value::Null);
+        let geodata = full_config.get("geodata").cloned().unwrap_or(Value::Null);
         if let Err(e) = CoreLoader::prepare(&geodata).await {
             warn!("Core loader: {e}");
         }
@@ -322,8 +307,7 @@ impl XrayService {
                 system,
             };
         }
-        self.handled_generation
-            .store(self.process.current_generation().await, Ordering::SeqCst);
+        self.handled_generation.store(self.process.current_generation().await, Ordering::SeqCst);
 
         let status = self.wait_for_internal_status().await;
         if !status.0 {
@@ -333,9 +317,7 @@ impl XrayService {
             // Do not leave a process that never passed the health check running.
             self.process.stop().await;
             let tail = self.process.tail_log_lines(5).await;
-            let log_reason = tail
-                .last()
-                .map(|l| l.trim().chars().take(500).collect::<String>());
+            let log_reason = tail.last().map(|l| l.trim().chars().take(500).collect::<String>());
             let error_message = match log_reason {
                 Some(reason) if !reason.is_empty() => {
                     format!("{} · {}", status.1.unwrap_or_default(), reason)
@@ -353,10 +335,7 @@ impl XrayService {
 
         self.is_xray_online.store(true, Ordering::SeqCst);
         self.refresh_xray_version().await;
-        info!(
-            "✔ XRay Core v{:?} is up and running.",
-            *self.xray_version.read().await
-        );
+        info!("✔ XRay Core v{:?} is up and running.", *self.xray_version.read().await);
 
         self.run_post_start(&body.internals.metadata).await;
 
@@ -370,11 +349,7 @@ impl XrayService {
     }
 
     async fn build_start_system(&self) -> StartXraySystem {
-        let interface = self
-            .network_stats
-            .get_default()
-            .await
-            .map(|r| r.to_contract());
+        let interface = self.network_stats.get_default().await.map(|r| r.to_contract());
         StartXraySystem {
             info: system_stats::get_system_info(),
             stats: system_stats::get_system_stats(),
@@ -384,7 +359,9 @@ impl XrayService {
 
     async fn run_post_start(&self, metadata: &Option<rw_contract::models::NodeMetadata>) {
         let state = self.plugin_state.lock().await;
-        if !state.available.post_start || !state.post_start.enabled || !state.post_start.webhook_enabled
+        if !state.available.post_start
+            || !state.post_start.enabled
+            || !state.post_start.webhook_enabled
         {
             return;
         }
@@ -413,13 +390,11 @@ impl XrayService {
         let mut delay = Duration::from_millis(100);
 
         for attempt in 1..=30 {
-            if let Ok(rpc) = XrayRpc::connect_abstract(&self.internal_view.xtls_api_socket_path).await
+            if let Ok(rpc) =
+                XrayRpc::connect_abstract(&self.internal_view.xtls_api_socket_path).await
             {
-                let result = tokio::time::timeout(
-                    Duration::from_secs(5),
-                    rpc.get_sys_stats(),
-                )
-                .await;
+                let result =
+                    tokio::time::timeout(Duration::from_secs(5), rpc.get_sys_stats()).await;
                 let error = match result {
                     Ok(Ok(_)) => {
                         *self.rpc.write().await = Some(Arc::new(rpc));
@@ -439,24 +414,16 @@ impl XrayService {
                 }
                 debug!("Xray status check {attempt}/30 failed: {error}");
             } else if !self.alive_with_pid(expected_pid).await {
-                return (
-                    false,
-                    Some("Xray Core process is not running anymore".into()),
-                );
+                return (false, Some("Xray Core process is not running anymore".into()));
             }
 
-            warn!(
-                "▸ XRay Core status check, {attempt}/30 · retrying in {}ms",
-                delay.as_millis()
-            );
+            warn!("▸ XRay Core status check, {attempt}/30 · retrying in {}ms", delay.as_millis());
             tokio::time::sleep(delay).await;
-            delay = Duration::from_millis((delay.as_millis() as f64 * 1.5) as u64).min(Duration::from_secs(2));
+            delay = Duration::from_millis((delay.as_millis() as f64 * 1.5) as u64)
+                .min(Duration::from_secs(2));
         }
 
-        (
-            false,
-            Some("Xray Core did not become ready in time".into()),
-        )
+        (false, Some("Xray Core did not become ready in time".into()))
     }
 
     async fn alive_with_pid(&self, started_pid: Option<u32>) -> bool {
@@ -551,11 +518,7 @@ impl XrayService {
             return false;
         }
         for (ip, timeout) in ips {
-            if nft
-                .add_address(&ip, TORRENT_BLOCKER_SET_NAME, Some(timeout))
-                .await
-                .is_err()
-            {
+            if nft.add_address(&ip, TORRENT_BLOCKER_SET_NAME, Some(timeout)).await.is_err() {
                 return false;
             }
             let state = self.plugin_state.lock().await;
@@ -652,15 +615,13 @@ impl XrayService {
         let was_enabled = previous.0;
 
         let needs_restart = if was_enabled && !now_enabled {
-            if parsed
-                .torrent_blocker
-                .as_ref()
-                .and_then(|t| t.include_rule_tags.as_ref())
-                .is_none()
+            if parsed.torrent_blocker.as_ref().and_then(|t| t.include_rule_tags.as_ref()).is_none()
             {
                 if let Some(rpc) = self.rpc().await {
                     let _ = rpc
-                        .remove_outbound(rw_contract::xray_constants::XRAY_TORRENT_BLOCKER_OUTBOUND_TAG)
+                        .remove_outbound(
+                            rw_contract::xray_constants::XRAY_TORRENT_BLOCKER_OUTBOUND_TAG,
+                        )
                         .await;
                 }
                 false
@@ -676,11 +637,8 @@ impl XrayService {
                 .unwrap_or_default()
                 .into_iter()
                 .collect();
-            let new_position = parsed
-                .torrent_blocker
-                .as_ref()
-                .and_then(|t| t.rule_placement)
-                .unwrap_or(0.0);
+            let new_position =
+                parsed.torrent_blocker.as_ref().and_then(|t| t.rule_placement).unwrap_or(0.0);
             (was_enabled != now_enabled)
                 || (still_enabled && previous.1 != new_tags)
                 || (still_enabled && previous.2 != new_position)
@@ -709,10 +667,7 @@ impl XrayService {
         let ips = resolve_ip_list(&cd.whitelist_ips, shared);
         let mut state = self.plugin_state.lock().await;
         state.connection_drop.set_whitelist_ips(ips.clone());
-        info!(
-            "[PLUGIN] Connection-Drop: {} whitelisted IPs synced.",
-            ips.len()
-        );
+        info!("[PLUGIN] Connection-Drop: {} whitelisted IPs synced.", ips.len());
     }
 
     async fn sync_torrent_blocker(
@@ -740,16 +695,10 @@ impl XrayService {
         let mut state = self.plugin_state.lock().await;
         state.torrent_blocker.ignored_ips = ips.iter().cloned().collect();
         state.torrent_blocker.ignored_users = users.iter().cloned().collect();
-        state
-            .torrent_blocker
-            .configure(tb.block_duration, tb.rule_placement);
+        state.torrent_blocker.configure(tb.block_duration, tb.rule_placement);
         state.torrent_blocker.webhook_url = tb.webhook_url.clone();
-        state.torrent_blocker.include_rule_tags = tb
-            .include_rule_tags
-            .clone()
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
+        state.torrent_blocker.include_rule_tags =
+            tb.include_rule_tags.clone().unwrap_or_default().into_iter().collect();
         info!(
             "[PLUGIN] Torrent-Blocker: blockDuration={}s, {} ignored IPs, {} ignored users",
             tb.block_duration,
@@ -767,16 +716,10 @@ impl XrayService {
             return;
         }
         let mut state = self.plugin_state.lock().await;
-        state
-            .pre_start
-            .configure(ps.enabled, ps.cleanup_sockets.clone());
+        state.pre_start.configure(ps.enabled, ps.cleanup_sockets.clone());
         info!(
             "[PLUGIN] Pre-Start: socket cleanup {}.",
-            if state.pre_start.cleanup_sockets_enabled {
-                "enabled"
-            } else {
-                "disabled"
-            }
+            if state.pre_start.cleanup_sockets_enabled { "enabled" } else { "disabled" }
         );
     }
 
@@ -792,11 +735,7 @@ impl XrayService {
         state.post_start.configure(ps.enabled, ps.webhook.clone());
         info!(
             "[PLUGIN] Post-Start: webhook {}.",
-            if state.post_start.webhook_enabled {
-                "enabled"
-            } else {
-                "disabled"
-            }
+            if state.post_start.webhook_enabled { "enabled" } else { "disabled" }
         );
     }
 
@@ -813,20 +752,11 @@ impl XrayService {
             return;
         }
         let ips = resolve_ip_list(&f.blocked_ips, shared);
-        let _ = self
-            .nft
-            .lock()
-            .await
-            .add_addresses(&ips, INGRESS_FILTER_IP_SET_NAME)
-            .await;
+        let _ = self.nft.lock().await.add_addresses(&ips, INGRESS_FILTER_IP_SET_NAME).await;
         info!("[PLUGIN] Ingress Filter: {} IPs synced.", ips.len());
     }
 
-    async fn sync_egress_filter(
-        &self,
-        plugin: &NodePlugin,
-        shared: &HashMap<String, Vec<String>>,
-    ) {
+    async fn sync_egress_filter(&self, plugin: &NodePlugin, shared: &HashMap<String, Vec<String>>) {
         let Some(f) = plugin.egress_filter.as_ref() else {
             return;
         };
@@ -838,17 +768,9 @@ impl XrayService {
         let ports = f.blocked_ports.clone().unwrap_or_default();
 
         let nft = self.nft.lock().await;
-        let _ = nft
-            .add_addresses(&ips, EGRESS_FILTER_IP_SET_NAME)
-            .await;
-        let _ = nft
-            .add_ports(&ports, EGRESS_FILTER_PORT_SET_NAME)
-            .await;
-        info!(
-            "[PLUGIN] Egress Filter: {} IPs, {} ports synced.",
-            ips.len(),
-            ports.len()
-        );
+        let _ = nft.add_addresses(&ips, EGRESS_FILTER_IP_SET_NAME).await;
+        let _ = nft.add_ports(&ports, EGRESS_FILTER_PORT_SET_NAME).await;
+        info!("[PLUGIN] Egress Filter: {} IPs, {} ports synced.", ips.len(), ports.len());
     }
 
     async fn resolve_shared_lists(&self, plugin: &NodePlugin) -> HashMap<String, Vec<String>> {
@@ -931,10 +853,9 @@ impl XrayService {
     }
 
     pub async fn require_rpc(&self) -> Result<Arc<XrayRpc>, RpcError> {
-        self.rpc().await.ok_or_else(|| RpcError {
-            code: 14,
-            message: "Xray RPC unavailable".into(),
-        })
+        self.rpc()
+            .await
+            .ok_or_else(|| RpcError { code: 14, message: "Xray RPC unavailable".into() })
     }
 }
 
@@ -949,11 +870,7 @@ mod tests {
         let mut shared = HashMap::new();
         shared.insert("ext:list".to_string(), vec!["1.1.1.1".to_string()]);
 
-        let ips = vec![
-            "ext:list".to_string(),
-            "8.8.8.8".to_string(),
-            "ext:missing".to_string(),
-        ];
+        let ips = vec!["ext:list".to_string(), "8.8.8.8".to_string(), "ext:missing".to_string()];
 
         assert_eq!(
             resolve_ip_list(&ips, &shared),

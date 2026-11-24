@@ -37,10 +37,7 @@ pub enum DownloadError {
 impl DownloadError {
     /// Transient failures worth retrying (connection/timeout/IO).
     pub fn is_retryable(&self) -> bool {
-        matches!(
-            self,
-            DownloadError::Http(_) | DownloadError::Io(_) | DownloadError::Timeout
-        )
+        matches!(self, DownloadError::Http(_) | DownloadError::Io(_) | DownloadError::Timeout)
     }
 }
 
@@ -79,20 +76,16 @@ pub async fn download_file(
     let path = path.as_ref().to_path_buf();
     let tmp_path = PathBuf::from(format!("{}.download", path.display()));
 
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::limited(10))
-        .build()?;
+    let client =
+        reqwest::Client::builder().redirect(reqwest::redirect::Policy::limited(10)).build()?;
 
     let result = async {
         // Wait for the first byte (response headers) with a dedicated timeout.
         // A total-operation deadline is intentionally not used: large cores and
         // geo assets may legitimately take longer than a few seconds to stream.
-        let response = tokio::time::timeout(
-            options.first_byte_timeout,
-            client.get(url).send(),
-        )
-        .await
-        .map_err(|_| DownloadError::Timeout)??;
+        let response = tokio::time::timeout(options.first_byte_timeout, client.get(url).send())
+            .await
+            .map_err(|_| DownloadError::Timeout)??;
         if !response.status().is_success() {
             return Err(DownloadError::BadStatus(response.status().as_u16()));
         }

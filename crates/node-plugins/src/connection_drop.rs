@@ -19,22 +19,10 @@ pub async fn drop_connections(state: &ConnectionDropState, ips: &[String], avail
 }
 
 async fn kill_sockets(ip: &str) -> Result<(), std::io::Error> {
-    let out = Command::new("ss")
-        .args(["-K", "src", ip])
-        .output()
-        .await?;
-    debug!(
-        "ss -K src {ip}: {}",
-        String::from_utf8_lossy(&out.stdout).trim()
-    );
+    let out = Command::new("ss").args(["-K", "src", ip]).output().await?;
+    debug!("ss -K src {ip}: {}", String::from_utf8_lossy(&out.stdout).trim());
 
-    let out = Command::new("ss")
-        .args(["-K", "dst", ip])
-        .output()
-        .await?;
-    debug!(
-        "ss -K dst {ip}: {}",
-        String::from_utf8_lossy(&out.stdout).trim()
-    );
+    let out = Command::new("ss").args(["-K", "dst", ip]).output().await?;
+    debug!("ss -K dst {ip}: {}", String::from_utf8_lossy(&out.stdout).trim());
     Ok(())
 }

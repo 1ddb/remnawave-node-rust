@@ -71,10 +71,8 @@ pub fn default_policy(stats_user_online: bool) -> Value {
 pub fn merge_policy(existing: Option<&Value>, stats_user_online: bool) -> Value {
     let mut built = default_policy(stats_user_online);
     if let Some(existing) = existing {
-        if let Some(level0) = existing
-            .get("levels")
-            .and_then(|l| l.get("0"))
-            .and_then(Value::as_object)
+        if let Some(level0) =
+            existing.get("levels").and_then(|l| l.get("0")).and_then(Value::as_object)
         {
             if let Some(levels) = built
                 .get_mut("levels")

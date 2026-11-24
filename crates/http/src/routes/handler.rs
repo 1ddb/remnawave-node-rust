@@ -13,10 +13,8 @@ async fn user_ips(state: &AppState, user_id: &str) -> Option<Vec<String>> {
         return None;
     }
     let rpc = state.xray.rpc_for_handler().await?;
-    let ips = rpc
-        .get_stats_online_ip_list(&format!("user>>>{user_id}>>>online"), true)
-        .await
-        .ok()?;
+    let ips =
+        rpc.get_stats_online_ip_list(&format!("user>>>{user_id}>>>online"), true).await.ok()?;
     Some(ips.into_keys().collect())
 }
 
@@ -27,28 +25,17 @@ pub async fn add_user(
 ) -> Result<Json<AddUserResponse>, ApiError> {
     let Some(first) = body.data.first() else {
         return Ok(Json(AddUserResponse {
-            response: AddUserResponseData {
-                success: true,
-                error: None,
-            },
+            response: AddUserResponseData { success: true, error: None },
         }));
     };
     let user_id = first.tag_username();
 
     for item in &body.data {
-        state
-            .xray
-            .internal()
-            .add_xtls_config_inbound(item.tag())
-            .await;
+        state.xray.internal().add_xtls_config_inbound(item.tag()).await;
     }
 
     let prev = body.hash_data.prev_vless_uuid.clone();
-    let user_ips = if prev.is_some() {
-        user_ips(&state, &user_id).await
-    } else {
-        None
-    };
+    let user_ips = if prev.is_some() { user_ips(&state, &user_id).await } else { None };
 
     let rpc = state
         .xray
@@ -60,11 +47,7 @@ pub async fn add_user(
     for tag in &inbound_tags {
         let _ = rpc.remove_user(tag, &user_id).await;
         let hash = prev.as_deref().unwrap_or(&body.hash_data.vless_uuid);
-        state
-            .xray
-            .internal()
-            .remove_user_from_inbound(tag, hash)
-            .await;
+        state.xray.internal().remove_user_from_inbound(tag, hash).await;
     }
 
     if let (Some(ips), Some(_)) = (&user_ips, &prev) {
@@ -74,40 +57,22 @@ pub async fn add_user(
     let mut results: Vec<Result<bool, String>> = Vec::new();
     for item in &body.data {
         let result = match item {
-            AddUserItem::Trojan {
-                tag,
-                username,
-                password,
-            } => rpc.add_trojan_user(tag, username, password, 0).await,
-            AddUserItem::Vless {
-                tag,
-                username,
-                uuid,
-                flow,
-            } => rpc.add_vless_user(tag, username, uuid, flow, 0).await,
-            AddUserItem::Shadowsocks {
-                tag,
-                username,
-                password,
-                cipher_type,
-                ..
-            } => {
+            AddUserItem::Trojan { tag, username, password } => {
+                rpc.add_trojan_user(tag, username, password, 0).await
+            }
+            AddUserItem::Vless { tag, username, uuid, flow } => {
+                rpc.add_vless_user(tag, username, uuid, flow, 0).await
+            }
+            AddUserItem::Shadowsocks { tag, username, password, cipher_type, .. } => {
                 rpc.add_shadowsocks_user(tag, username, password, *cipher_type as i32, false, 0)
                     .await
             }
-            AddUserItem::Shadowsocks22 {
-                tag,
-                username,
-                password,
-            } => {
-                rpc.add_shadowsocks2022_user(tag, username, password, 0)
-                    .await
+            AddUserItem::Shadowsocks22 { tag, username, password } => {
+                rpc.add_shadowsocks2022_user(tag, username, password, 0).await
             }
-            AddUserItem::Hysteria {
-                tag,
-                username,
-                password,
-            } => rpc.add_hysteria_user(tag, username, password, 0).await,
+            AddUserItem::Hysteria { tag, username, password } => {
+                rpc.add_hysteria_user(tag, username, password, 0).await
+            }
         };
 
         match result {
@@ -127,7 +92,7 @@ pub async fn add_user(
         }
     }
 
-    let all_failed = results.iter().all(|r| matches!(r, Err(_)));
+    let all_failed = results.iter().all(|r| r.is_err());
     if all_failed {
         return Ok(Json(AddUserResponse {
             response: AddUserResponseData {
@@ -137,12 +102,7 @@ pub async fn add_user(
         }));
     }
 
-    Ok(Json(AddUserResponse {
-        response: AddUserResponseData {
-            success: true,
-            error: None,
-        },
-    }))
+    Ok(Json(AddUserResponse { response: AddUserResponseData { success: true, error: None } }))
 }
 
 pub async fn remove_user(
@@ -153,10 +113,7 @@ pub async fn remove_user(
     let inbound_tags = state.xray.internal().get_xtls_config_inbounds().await;
     if inbound_tags.is_empty() {
         return Ok(Json(RemoveUserResponse {
-            response: RemoveUserResponseData {
-                success: true,
-                error: None,
-            },
+            response: RemoveUserResponseData { success: true, error: None },
         }));
     }
 
@@ -170,23 +127,15 @@ pub async fn remove_user(
     let mut results: Vec<Result<bool, String>> = Vec::new();
 
     for tag in &inbound_tags {
-        results.push(
-            rpc.remove_user(tag, &body.username)
-                .await
-                .map_err(|e| e.message),
-        );
-        state
-            .xray
-            .internal()
-            .remove_user_from_inbound(tag, &body.hash_data.vless_uuid)
-            .await;
+        results.push(rpc.remove_user(tag, &body.username).await.map_err(|e| e.message));
+        state.xray.internal().remove_user_from_inbound(tag, &body.hash_data.vless_uuid).await;
     }
 
     if let Some(ips) = user_ips {
         state.xray.drop_ips(ips).await;
     }
 
-    let all_failed = results.iter().all(|r| matches!(r, Err(_)));
+    let all_failed = results.iter().all(|r| r.is_err());
     if all_failed {
         return Ok(Json(RemoveUserResponse {
             response: RemoveUserResponseData {
@@ -196,12 +145,7 @@ pub async fn remove_user(
         }));
     }
 
-    Ok(Json(RemoveUserResponse {
-        response: RemoveUserResponseData {
-            success: true,
-            error: None,
-        },
-    }))
+    Ok(Json(RemoveUserResponse { response: RemoveUserResponseData { success: true, error: None } }))
 }
 
 pub async fn add_users(
@@ -210,11 +154,7 @@ pub async fn add_users(
     ContractJson(body): ContractJson<AddUsersRequest>,
 ) -> Result<Json<AddUsersResponse>, ApiError> {
     for tag in &body.affected_inbound_tags {
-        state
-            .xray
-            .internal()
-            .add_xtls_config_inbound(tag)
-            .await;
+        state.xray.internal().add_xtls_config_inbound(tag).await;
     }
 
     let rpc = state
@@ -227,11 +167,7 @@ pub async fn add_users(
         let inbound_tags = state.xray.internal().get_xtls_config_inbounds().await;
         for tag in &inbound_tags {
             let _ = rpc.remove_user(tag, &user.user_data.user_id).await;
-            state
-                .xray
-                .internal()
-                .remove_user_from_inbound(tag, &user.user_data.hash_uuid)
-                .await;
+            state.xray.internal().remove_user_from_inbound(tag, &user.user_data.hash_uuid).await;
         }
 
         for item in &user.inbound_data {
@@ -268,13 +204,7 @@ pub async fn add_users(
                 }
                 AddUsersInbound::Shadowsocks22 { tag } => {
                     let key = base64_encode(user.user_data.ss_password.as_bytes());
-                    rpc.add_shadowsocks2022_user(
-                        tag,
-                        &user.user_data.user_id,
-                        &key,
-                        0,
-                    )
-                    .await
+                    rpc.add_shadowsocks2022_user(tag, &user.user_data.user_id, &key, 0).await
                 }
                 AddUsersInbound::Hysteria { tag } => {
                     rpc.add_hysteria_user(
@@ -299,12 +229,7 @@ pub async fn add_users(
         }
     }
 
-    Ok(Json(AddUsersResponse {
-        response: AddUserResponseData {
-            success: true,
-            error: None,
-        },
-    }))
+    Ok(Json(AddUsersResponse { response: AddUserResponseData { success: true, error: None } }))
 }
 
 pub async fn remove_users(
@@ -315,10 +240,7 @@ pub async fn remove_users(
     let inbound_tags = state.xray.internal().get_xtls_config_inbounds().await;
     if inbound_tags.is_empty() {
         return Ok(Json(RemoveUsersResponse {
-            response: RemoveUserResponseData {
-                success: true,
-                error: None,
-            },
+            response: RemoveUserResponseData { success: true, error: None },
         }));
     }
 
@@ -332,23 +254,15 @@ pub async fn remove_users(
     for user in &body.users {
         let user_ips = user_ips(&state, &user.user_id).await;
         for tag in &inbound_tags {
-            results.push(
-                rpc.remove_user(tag, &user.user_id)
-                    .await
-                    .map_err(|e| e.message),
-            );
-            state
-                .xray
-                .internal()
-                .remove_user_from_inbound(tag, &user.hash_uuid)
-                .await;
+            results.push(rpc.remove_user(tag, &user.user_id).await.map_err(|e| e.message));
+            state.xray.internal().remove_user_from_inbound(tag, &user.hash_uuid).await;
         }
         if let Some(ips) = user_ips {
             state.xray.drop_ips(ips).await;
         }
     }
 
-    let all_failed = results.iter().all(|r| matches!(r, Err(_)));
+    let all_failed = results.iter().all(|r| r.is_err());
     if all_failed {
         return Ok(Json(RemoveUsersResponse {
             response: RemoveUserResponseData {
@@ -359,10 +273,7 @@ pub async fn remove_users(
     }
 
     Ok(Json(RemoveUsersResponse {
-        response: RemoveUserResponseData {
-            success: true,
-            error: None,
-        },
+        response: RemoveUserResponseData { success: true, error: None },
     }))
 }
 
@@ -375,9 +286,7 @@ pub async fn drop_users_connections(
             state.xray.drop_ips(ips).await;
         }
     }
-    Ok(Json(GenericSuccessResponse {
-        response: GenericSuccessResponseData { success: true },
-    }))
+    Ok(Json(GenericSuccessResponse { response: GenericSuccessResponseData { success: true } }))
 }
 
 pub async fn drop_ips(
@@ -385,9 +294,7 @@ pub async fn drop_ips(
     ContractJson(body): ContractJson<DropIpsRequest>,
 ) -> Result<Json<GenericSuccessResponse>, ApiError> {
     state.xray.drop_ips(body.ips).await;
-    Ok(Json(GenericSuccessResponse {
-        response: GenericSuccessResponseData { success: true },
-    }))
+    Ok(Json(GenericSuccessResponse { response: GenericSuccessResponseData { success: true } }))
 }
 
 fn base64_encode(bytes: &[u8]) -> String {

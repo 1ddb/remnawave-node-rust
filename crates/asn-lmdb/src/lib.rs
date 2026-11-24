@@ -34,21 +34,13 @@ pub struct AsnLmdb {
 impl AsnLmdb {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, AsnError> {
         let env = unsafe {
-            EnvOpenOptions::new()
-                .max_dbs(1)
-                .flags(EnvFlags::READ_ONLY)
-                .open(path.as_ref())?
+            EnvOpenOptions::new().max_dbs(1).flags(EnvFlags::READ_ONLY).open(path.as_ref())?
         };
         let rtxn = env.read_txn()?;
-        let db = env
-            .open_database::<Bytes, Bytes>(&rtxn, None)?
-            .ok_or(AsnError::MissingDatabase)?;
+        let db =
+            env.open_database::<Bytes, Bytes>(&rtxn, None)?.ok_or(AsnError::MissingDatabase)?;
         drop(rtxn);
-        Ok(Self {
-            env,
-            db,
-            available: RwLock::new(true),
-        })
+        Ok(Self { env, db, available: RwLock::new(true) })
     }
 
     pub fn open_default() -> Option<Self> {

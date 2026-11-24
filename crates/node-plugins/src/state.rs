@@ -2,15 +2,8 @@ use std::collections::HashSet;
 
 use rw_contract::models::TorrentBlockerReport;
 
-pub const DEFAULT_IGNORED_IPS: &[&str] = &[
-    "::",
-    "::1",
-    "0.0.0.0",
-    "0.0.0.0/0",
-    "127.0.0.0/8",
-    "127.0.0.1",
-    "255.255.255.255",
-];
+pub const DEFAULT_IGNORED_IPS: &[&str] =
+    &["::", "::1", "0.0.0.0", "0.0.0.0/0", "127.0.0.0/8", "127.0.0.1", "255.255.255.255"];
 
 fn default_ignored(ip: &str) -> bool {
     DEFAULT_IGNORED_IPS.contains(&ip)

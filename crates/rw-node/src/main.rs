@@ -47,10 +47,7 @@ fn main() {
 
     log_payload_report(&config);
 
-    let runtime = match tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-    {
+    let runtime = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
         Ok(runtime) => runtime,
         Err(e) => {
             eprintln!("Failed to start tokio runtime: {e}");
@@ -121,17 +118,10 @@ fn main() {
 
 fn init_tracing() {
     use tracing_subscriber::EnvFilter;
-    let default = if std::env::var("NODE_ENV").as_deref() == Ok("development") {
-        "debug"
-    } else {
-        "info"
-    };
+    let default =
+        if std::env::var("NODE_ENV").as_deref() == Ok("development") { "debug" } else { "info" };
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default));
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_target(false)
-        .with_level(true)
-        .init();
+    tracing_subscriber::fmt().with_env_filter(filter).with_target(false).with_level(true).init();
 }
 
 fn log_payload_report(config: &rw_config::AppConfig) {
@@ -140,14 +130,7 @@ fn log_payload_report(config: &rw_config::AppConfig) {
 
     let rows: Vec<String> = checks
         .iter()
-        .map(|c| {
-            format!(
-                "{} {}  {}",
-                if c.ok { '✓' } else { '✗' },
-                c.name,
-                c.detail
-            )
-        })
+        .map(|c| format!("{} {}  {}", if c.ok { '✓' } else { '✗' }, c.name, c.detail))
         .collect();
     let mut sections = vec![rows.join("\n")];
 
@@ -156,14 +139,7 @@ fn log_payload_report(config: &rw_config::AppConfig) {
         sections.push(sni);
         info!(
             "\n{}\n",
-            render_box(
-                "SECRET_KEY OK",
-                &sections,
-                BoxOptions {
-                    align: Align::Left,
-                    width: 62,
-                }
-            )
+            render_box("SECRET_KEY OK", &sections, BoxOptions { align: Align::Left, width: 62 })
         );
     } else {
         error!(
@@ -171,10 +147,7 @@ fn log_payload_report(config: &rw_config::AppConfig) {
             render_box(
                 "SECRET_KEY INVALID",
                 &sections,
-                BoxOptions {
-                    align: Align::Left,
-                    width: 62,
-                }
+                BoxOptions { align: Align::Left, width: 62 }
             )
         );
         std::process::exit(1);
@@ -199,23 +172,11 @@ async fn build_start_message(
                 "XRay Core: v{}\nXRay Path: /usr/local/bin/xray",
                 version.unwrap_or_else(|| "N/A".into())
             ),
-            format!(
-                "{}C, {}, {} bytes",
-                system.cpus, system.cpu_model, system.memory_total
-            ),
-            format!(
-                "Kernel: {} {} {}",
-                system.release, system.type_, system.platform
-            ),
-            format!(
-                "Network Interfaces: {}",
-                system.network_interfaces.join(", ")
-            ),
+            format!("{}C, {}, {} bytes", system.cpus, system.cpu_model, system.memory_total),
+            format!("Kernel: {} {} {}", system.release, system.type_, system.platform),
+            format!("Network Interfaces: {}", system.network_interfaces.join(", ")),
         ],
-        BoxOptions {
-            align: Align::Center,
-            width: 62,
-        },
+        BoxOptions { align: Align::Center, width: 62 },
     )
 }
 

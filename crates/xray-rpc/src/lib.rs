@@ -54,14 +54,16 @@ pub mod xray {
     }
 }
 
+use proxyman_proto::handler_service_client::HandlerServiceClient;
+use proxyman_proto::{
+    AddUserOperation, AlterInboundRequest, RemoveOutboundRequest, RemoveUserOperation,
+};
+use stats_proto::stats_service_client::StatsServiceClient;
+use stats_proto::{GetStatsRequest, GetUsersStatsRequest, QueryStatsRequest, SysStatsResponse};
 pub use xray::app::proxyman::command as proxyman_proto;
 pub use xray::app::stats::command as stats_proto;
 use xray::common::protocol::User;
 use xray::common::serial::TypedMessage;
-use proxyman_proto::handler_service_client::HandlerServiceClient;
-use proxyman_proto::{AddUserOperation, AlterInboundRequest, RemoveOutboundRequest, RemoveUserOperation};
-use stats_proto::stats_service_client::StatsServiceClient;
-use stats_proto::{GetStatsRequest, GetUsersStatsRequest, QueryStatsRequest, SysStatsResponse};
 
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -89,19 +91,13 @@ impl RpcError {
 
 impl From<tonic::Status> for RpcError {
     fn from(status: tonic::Status) -> Self {
-        Self {
-            code: status.code() as i32,
-            message: status.message().to_string(),
-        }
+        Self { code: status.code() as i32, message: status.message().to_string() }
     }
 }
 
 impl From<tonic::transport::Error> for RpcError {
     fn from(error: tonic::transport::Error) -> Self {
-        Self {
-            code: 14,
-            message: error.to_string(),
-        }
+        Self { code: 14, message: error.to_string() }
     }
 }
 
@@ -133,8 +129,7 @@ impl XrayRpc {
     }
 
     fn stats_client(&self) -> StatsServiceClient<Channel> {
-        StatsServiceClient::new(self.channel.clone())
-            .max_decoding_message_size(100_000_000)
+        StatsServiceClient::new(self.channel.clone()).max_decoding_message_size(100_000_000)
     }
 
     fn handler_client(&self) -> HandlerServiceClient<Channel> {
@@ -143,10 +138,8 @@ impl XrayRpc {
 
     pub async fn get_sys_stats(&self) -> Result<SysStatsResponse, RpcError> {
         let mut client = self.stats_client();
-        let response = client
-            .get_sys_stats(stats_proto::SysStatsRequest {})
-            .await
-            .map_err(RpcError::from)?;
+        let response =
+            client.get_sys_stats(stats_proto::SysStatsRequest {}).await.map_err(RpcError::from)?;
         Ok(response.into_inner())
     }
 
@@ -157,10 +150,7 @@ impl XrayRpc {
     ) -> Result<Vec<stats_proto::Stat>, RpcError> {
         let mut client = self.stats_client();
         let response = client
-            .query_stats(QueryStatsRequest {
-                pattern: pattern.to_string(),
-                reset,
-            })
+            .query_stats(QueryStatsRequest { pattern: pattern.to_string(), reset })
             .await
             .map_err(RpcError::from)?;
         Ok(response.into_inner().stat)
@@ -168,12 +158,8 @@ impl XrayRpc {
 
     pub async fn get_stats_online(&self, name: &str) -> Result<bool, RpcError> {
         let mut client = self.stats_client();
-        let result = client
-            .get_stats_online(GetStatsRequest {
-                name: name.to_string(),
-                reset: false,
-            })
-            .await;
+        let result =
+            client.get_stats_online(GetStatsRequest { name: name.to_string(), reset: false }).await;
         match result {
             Ok(_) => Ok(true),
             Err(status) => {
@@ -194,10 +180,7 @@ impl XrayRpc {
     ) -> Result<HashMap<String, i64>, RpcError> {
         let mut client = self.stats_client();
         let response = client
-            .get_stats_online_ip_list(GetStatsRequest {
-                name: name.to_string(),
-                reset,
-            })
+            .get_stats_online_ip_list(GetStatsRequest { name: name.to_string(), reset })
             .await
             .map_err(RpcError::from)?;
         Ok(response.into_inner().ips)
@@ -220,13 +203,7 @@ impl XrayRpc {
         reset: bool,
     ) -> Result<Vec<stats_proto::UserStat>, RpcError> {
         let mut client = self.stats_client();
-        match client
-            .get_users_stats(GetUsersStatsRequest {
-                include_traffic,
-                reset,
-            })
-            .await
-        {
+        match client.get_users_stats(GetUsersStatsRequest { include_traffic, reset }).await {
             Ok(response) => Ok(response.into_inner().users),
             Err(status) => {
                 let err = RpcError::from(status);
@@ -260,19 +237,13 @@ impl XrayRpc {
             if ips.is_empty() {
                 continue;
             }
-            users.push(stats_proto::UserStat {
-                email,
-                ips,
-                traffic: None,
-            });
+            users.push(stats_proto::UserStat { email, ips, traffic: None });
         }
         Ok(users)
     }
 
     pub async fn remove_user(&self, tag: &str, username: &str) -> Result<bool, RpcError> {
-        let operation = RemoveUserOperation {
-            email: username.to_string(),
-        };
+        let operation = RemoveUserOperation { email: username.to_string() };
         self.alter_inbound(
             tag,
             typed_message("xray.app.proxyman.command.RemoveUserOperation", &operation),
@@ -290,22 +261,13 @@ impl XrayRpc {
         )
         .await
         .map(|_| true)
-        .or_else(|err| {
-            if err.is_already_exists() {
-                Ok(true)
-            } else {
-                Err(err)
-            }
-        })
+        .or_else(|err| if err.is_already_exists() { Ok(true) } else { Err(err) })
     }
 
     async fn alter_inbound(&self, tag: &str, operation: TypedMessage) -> Result<(), RpcError> {
         let mut client = self.handler_client();
         client
-            .alter_inbound(AlterInboundRequest {
-                tag: tag.to_string(),
-                operation: Some(operation),
-            })
+            .alter_inbound(AlterInboundRequest { tag: tag.to_string(), operation: Some(operation) })
             .await
             .map_err(RpcError::from)?;
         Ok(())
@@ -318,19 +280,8 @@ impl XrayRpc {
         password: &str,
         level: u32,
     ) -> Result<bool, RpcError> {
-        let account = xray::proxy::trojan::Account {
-            password: password.to_string(),
-        };
-        self.add_user(
-            tag,
-            build_user(
-                username,
-                level,
-                "xray.proxy.trojan.Account",
-                &account,
-            ),
-        )
-        .await
+        let account = xray::proxy::trojan::Account { password: password.to_string() };
+        self.add_user(tag, build_user(username, level, "xray.proxy.trojan.Account", &account)).await
     }
 
     pub async fn add_vless_user(
@@ -346,11 +297,7 @@ impl XrayRpc {
             flow: flow.to_string(),
             encryption: "none".to_string(),
         };
-        self.add_user(
-            tag,
-            build_user(username, level, "xray.proxy.vless.Account", &account),
-        )
-        .await
+        self.add_user(tag, build_user(username, level, "xray.proxy.vless.Account", &account)).await
     }
 
     pub async fn add_shadowsocks_user(
@@ -367,16 +314,8 @@ impl XrayRpc {
             cipher_type,
             iv_check,
         };
-        self.add_user(
-            tag,
-            build_user(
-                username,
-                level,
-                "xray.proxy.shadowsocks.Account",
-                &account,
-            ),
-        )
-        .await
+        self.add_user(tag, build_user(username, level, "xray.proxy.shadowsocks.Account", &account))
+            .await
     }
 
     pub async fn add_shadowsocks2022_user(
@@ -386,17 +325,10 @@ impl XrayRpc {
         key: &str,
         level: u32,
     ) -> Result<bool, RpcError> {
-        let account = xray::proxy::shadowsocks_2022::Account {
-            key: key.to_string(),
-        };
+        let account = xray::proxy::shadowsocks_2022::Account { key: key.to_string() };
         self.add_user(
             tag,
-            build_user(
-                username,
-                level,
-                "xray.proxy.shadowsocks_2022.Account",
-                &account,
-            ),
+            build_user(username, level, "xray.proxy.shadowsocks_2022.Account", &account),
         )
         .await
     }
@@ -408,17 +340,10 @@ impl XrayRpc {
         auth: &str,
         level: u32,
     ) -> Result<bool, RpcError> {
-        let account = xray::proxy::hysteria::account::Account {
-            auth: auth.to_string(),
-        };
+        let account = xray::proxy::hysteria::account::Account { auth: auth.to_string() };
         self.add_user(
             tag,
-            build_user(
-                username,
-                level,
-                "xray.proxy.hysteria.account.Account",
-                &account,
-            ),
+            build_user(username, level, "xray.proxy.hysteria.account.Account", &account),
         )
         .await
     }
@@ -426,9 +351,7 @@ impl XrayRpc {
     pub async fn remove_outbound(&self, tag: &str) -> Result<(), RpcError> {
         let mut client = self.handler_client();
         client
-            .remove_outbound(RemoveOutboundRequest {
-                tag: tag.to_string(),
-            })
+            .remove_outbound(RemoveOutboundRequest { tag: tag.to_string() })
             .await
             .map_err(RpcError::from)?;
         Ok(())
@@ -436,26 +359,17 @@ impl XrayRpc {
 }
 
 fn build_user<M: Message>(email: &str, level: u32, type_name: &str, account: &M) -> User {
-    User {
-        level,
-        email: email.to_string(),
-        account: Some(typed_message(type_name, account)),
-    }
+    User { level, email: email.to_string(), account: Some(typed_message(type_name, account)) }
 }
 
 fn typed_message<M: Message>(type_name: &str, message: &M) -> TypedMessage {
-    TypedMessage {
-        r#type: type_name.to_string(),
-        value: message.encode_to_vec(),
-    }
+    TypedMessage { r#type: type_name.to_string(), value: message.encode_to_vec() }
 }
 
 fn abstract_socket_addr(path: &str) -> Result<StdUnixSocketAddr, RpcError> {
     use std::os::linux::net::SocketAddrExt;
-    StdUnixSocketAddr::from_abstract_name(path.as_bytes()).map_err(|e| RpcError {
-        code: 14,
-        message: e.to_string(),
-    })
+    StdUnixSocketAddr::from_abstract_name(path.as_bytes())
+        .map_err(|e| RpcError { code: 14, message: e.to_string() })
 }
 
 /// Convenience wrapper used by the app state.

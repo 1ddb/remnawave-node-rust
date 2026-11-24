@@ -16,8 +16,8 @@ use axum::Router;
 use hyper::body::Incoming;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::service::TowerToHyperService;
-use rw_contract::routes as r;
 use rustls::ServerConfig;
+use rw_contract::routes as r;
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 use tower::ServiceBuilder;
@@ -33,88 +33,34 @@ pub fn build_public_router(state: AppState) -> Router {
         .route(r::xray::START_URL, post(routes::xray::start))
         .route(r::xray::STOP_URL, get(routes::xray::stop))
         .route(r::xray::NODE_HEALTH_CHECK_URL, get(routes::xray::healthcheck))
-        .route(
-            r::stats::GET_USER_ONLINE_STATUS_URL,
-            post(routes::stats::user_online_status),
-        )
-        .route(
-            r::stats::GET_USERS_STATS_URL,
-            post(routes::stats::users_stats),
-        )
-        .route(
-            r::stats::GET_SYSTEM_STATS_URL,
-            get(routes::stats::system_stats),
-        )
-        .route(
-            r::stats::GET_INBOUND_STATS_URL,
-            post(routes::stats::inbound_stats),
-        )
-        .route(
-            r::stats::GET_OUTBOUND_STATS_URL,
-            post(routes::stats::outbound_stats),
-        )
-        .route(
-            r::stats::GET_ALL_OUTBOUNDS_STATS_URL,
-            post(routes::stats::all_outbounds_stats),
-        )
-        .route(
-            r::stats::GET_ALL_INBOUNDS_STATS_URL,
-            post(routes::stats::all_inbounds_stats),
-        )
-        .route(
-            r::stats::GET_COMBINED_STATS_URL,
-            post(routes::stats::combined_stats),
-        )
-        .route(
-            r::stats::GET_USER_IP_LIST_URL,
-            post(routes::stats::user_ip_list),
-        )
-        .route(
-            r::stats::GET_USERS_IP_LIST_URL,
-            get(routes::stats::users_ip_list),
-        )
-        .route(
-            r::stats::GET_GEOCHECK_URL,
-            post(routes::stats::geocheck),
-        )
+        .route(r::stats::GET_USER_ONLINE_STATUS_URL, post(routes::stats::user_online_status))
+        .route(r::stats::GET_USERS_STATS_URL, post(routes::stats::users_stats))
+        .route(r::stats::GET_SYSTEM_STATS_URL, get(routes::stats::system_stats))
+        .route(r::stats::GET_INBOUND_STATS_URL, post(routes::stats::inbound_stats))
+        .route(r::stats::GET_OUTBOUND_STATS_URL, post(routes::stats::outbound_stats))
+        .route(r::stats::GET_ALL_OUTBOUNDS_STATS_URL, post(routes::stats::all_outbounds_stats))
+        .route(r::stats::GET_ALL_INBOUNDS_STATS_URL, post(routes::stats::all_inbounds_stats))
+        .route(r::stats::GET_COMBINED_STATS_URL, post(routes::stats::combined_stats))
+        .route(r::stats::GET_USER_IP_LIST_URL, post(routes::stats::user_ip_list))
+        .route(r::stats::GET_USERS_IP_LIST_URL, get(routes::stats::users_ip_list))
+        .route(r::stats::GET_GEOCHECK_URL, post(routes::stats::geocheck))
         .route(r::handler::ADD_USER_URL, post(routes::handler::add_user))
-        .route(
-            r::handler::REMOVE_USER_URL,
-            post(routes::handler::remove_user),
-        )
+        .route(r::handler::REMOVE_USER_URL, post(routes::handler::remove_user))
         .route(r::handler::ADD_USERS_URL, post(routes::handler::add_users))
-        .route(
-            r::handler::REMOVE_USERS_URL,
-            post(routes::handler::remove_users),
-        )
+        .route(r::handler::REMOVE_USERS_URL, post(routes::handler::remove_users))
         .route(
             r::handler::DROP_USERS_CONNECTIONS_URL,
             post(routes::handler::drop_users_connections),
         )
         .route(r::handler::DROP_IPS_URL, post(routes::handler::drop_ips))
         .route(r::plugin::SYNC_URL, post(routes::plugin::sync))
-        .route(
-            r::plugin::TORRENT_BLOCKER_COLLECT_URL,
-            post(routes::plugin::collect_reports),
-        )
-        .route(
-            r::plugin::NFTABLES_BLOCK_IPS_URL,
-            post(routes::plugin::block_ips),
-        )
-        .route(
-            r::plugin::NFTABLES_UNBLOCK_IPS_URL,
-            post(routes::plugin::unblock_ips),
-        )
-        .route(
-            r::plugin::NFTABLES_RECREATE_TABLES_URL,
-            post(routes::plugin::recreate_tables),
-        )
+        .route(r::plugin::TORRENT_BLOCKER_COLLECT_URL, post(routes::plugin::collect_reports))
+        .route(r::plugin::NFTABLES_BLOCK_IPS_URL, post(routes::plugin::block_ips))
+        .route(r::plugin::NFTABLES_UNBLOCK_IPS_URL, post(routes::plugin::unblock_ips))
+        .route(r::plugin::NFTABLES_RECREATE_TABLES_URL, post(routes::plugin::recreate_tables))
         .layer(DefaultBodyLimit::max(MAX_BODY))
         .layer(axum::middleware::from_fn(middleware::zstd_body))
-        .layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            middleware::jwt_auth,
-        ))
+        .layer(axum::middleware::from_fn_with_state(state.clone(), middleware::jwt_auth))
         .with_state(state);
 
     router
@@ -125,14 +71,8 @@ pub fn build_public_router(state: AppState) -> Router {
 pub fn build_internal_router(state: AppState) -> Router {
     Router::new()
         .route(r::internal::XRAY_INTERNAL_FULL_PATH, get(routes::internal::get_xray_config))
-        .route(
-            r::internal::XRAY_INTERNAL_FULL_WEBHOOK_PATH,
-            post(routes::internal::webhook),
-        )
-        .layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            middleware::internal_token,
-        ))
+        .route(r::internal::XRAY_INTERNAL_FULL_WEBHOOK_PATH, post(routes::internal::webhook))
+        .layer(axum::middleware::from_fn_with_state(state.clone(), middleware::internal_token))
         .layer(DefaultBodyLimit::max(MAX_BODY))
         .with_state(state)
 }
@@ -149,10 +89,7 @@ pub async fn serve(
     info!("HTTPS API listening on {bind}");
 
     let internal_listener = abstract_listener(&state.config.internal_socket_path)?;
-    info!(
-        "Internal API listening on @{}",
-        state.config.internal_socket_path
-    );
+    info!("Internal API listening on @{}", state.config.internal_socket_path);
 
     let acceptor = TlsAcceptor::from(tls_config);
 
@@ -168,22 +105,20 @@ pub async fn serve(
             let acceptor = acceptor.clone();
             let router = public_router.clone();
             tokio::spawn(async move {
-                let tls = match tokio::time::timeout(
-                    Duration::from_secs(10),
-                    acceptor.accept(stream),
-                )
-                .await
-                {
-                    Ok(Ok(tls)) => tls,
-                    Ok(Err(e)) => {
-                        error!("TLS handshake with {addr} failed: {e}");
-                        return;
-                    }
-                    Err(_) => {
-                        error!("TLS handshake with {addr} timed out");
-                        return;
-                    }
-                };
+                let tls =
+                    match tokio::time::timeout(Duration::from_secs(10), acceptor.accept(stream))
+                        .await
+                    {
+                        Ok(Ok(tls)) => tls,
+                        Ok(Err(e)) => {
+                            error!("TLS handshake with {addr} failed: {e}");
+                            return;
+                        }
+                        Err(_) => {
+                            error!("TLS handshake with {addr} timed out");
+                            return;
+                        }
+                    };
                 if let Err(e) = serve_connection(tls, router).await {
                     error!("Connection error: {e}");
                 }

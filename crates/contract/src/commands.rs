@@ -629,13 +629,7 @@ mod tests {
             },
         };
         let json = serde_json::to_value(&report).unwrap();
-        assert_eq!(
-            json["actionReport"]["willUnblockAt"],
-            "2026-01-02T03:04:05.000Z"
-        );
-        assert_eq!(
-            json["actionReport"]["processedAt"],
-            "2026-01-02T03:04:05.000Z"
-        );
+        assert_eq!(json["actionReport"]["willUnblockAt"], "2026-01-02T03:04:05.000Z");
+        assert_eq!(json["actionReport"]["processedAt"], "2026-01-02T03:04:05.000Z");
     }
 }

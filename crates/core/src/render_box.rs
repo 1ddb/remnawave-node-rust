@@ -13,10 +13,7 @@ pub struct BoxOptions {
 
 impl Default for BoxOptions {
     fn default() -> Self {
-        Self {
-            align: Align::Center,
-            width: DEFAULT_WIDTH,
-        }
+        Self { align: Align::Center, width: DEFAULT_WIDTH }
     }
 }
 

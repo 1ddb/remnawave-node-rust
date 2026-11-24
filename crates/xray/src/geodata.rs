@@ -86,22 +86,14 @@ async fn prepare_asset(asset: Asset, dir: PathBuf) {
         return;
     }
 
-    if let Ok(downloaded) = download_file_with_retry(
-        &asset.url,
-        &path,
-        DownloadOptions::default(),
-    )
-    .await
+    if let Ok(downloaded) =
+        download_file_with_retry(&asset.url, &path, DownloadOptions::default()).await
     {
         info!("Downloaded \"{}\" ({} bytes)", asset.file, downloaded.size);
         return;
     }
 
-    match std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&path)
-    {
+    match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
         Ok(_) => warn!("Created empty stub asset \"{}\".", path.display()),
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
         Err(e) => error!("Failed to create stub asset \"{}\": {e}", path.display()),
@@ -119,7 +111,5 @@ fn safe_file_name(name: &str) -> bool {
     !name.is_empty()
         && name != "."
         && name != ".."
-        && name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
 }

@@ -69,9 +69,7 @@ mod tests {
     #[tokio::test]
     async fn accepts_valid_body() {
         let ContractJson(body) =
-            ContractJson::<TestBody>::from_request(request(r#"{"value":7}"#), &())
-                .await
-                .unwrap();
+            ContractJson::<TestBody>::from_request(request(r#"{"value":7}"#), &()).await.unwrap();
         assert_eq!(body.value, 7);
     }
 
@@ -97,9 +95,6 @@ mod tests {
 
         let response = error.into_response();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert_eq!(
-            response.headers().get(header::CONTENT_TYPE).unwrap(),
-            "application/json"
-        );
+        assert_eq!(response.headers().get(header::CONTENT_TYPE).unwrap(), "application/json");
     }
 }

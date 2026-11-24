@@ -5,9 +5,7 @@ use rw_contract::models::{NodeSystemInfo, NodeSystemStats};
 pub fn get_system_info() -> NodeSystemInfo {
     let uname = uname();
     let cpu_model = read_cpu_model();
-    let cpus = std::thread::available_parallelism()
-        .map(|n| n.get() as i64)
-        .unwrap_or(1);
+    let cpus = std::thread::available_parallelism().map(|n| n.get() as i64).unwrap_or(1);
 
     NodeSystemInfo {
         arch: node_arch(),
@@ -68,13 +66,7 @@ fn total_memory_bytes() -> u64 {
 }
 
 fn parse_kb(value: &str) -> u64 {
-    value
-        .trim()
-        .trim_end_matches("kB")
-        .trim()
-        .parse::<u64>()
-        .unwrap_or(0)
-        * 1024
+    value.trim().trim_end_matches("kB").trim().parse::<u64>().unwrap_or(0) * 1024
 }
 
 fn uptime_seconds() -> f64 {
@@ -87,12 +79,7 @@ fn uptime_seconds() -> f64 {
 fn load_avg() -> Vec<f64> {
     std::fs::read_to_string("/proc/loadavg")
         .ok()
-        .map(|s| {
-            s.split_whitespace()
-                .take(3)
-                .filter_map(|v| v.parse().ok())
-                .collect()
-        })
+        .map(|s| s.split_whitespace().take(3).filter_map(|v| v.parse().ok()).collect())
         .unwrap_or_else(|| vec![0.0, 0.0, 0.0])
 }
 
@@ -154,9 +141,5 @@ fn uname() -> Uname {
         let bytes: Vec<u8> = p.iter().take_while(|&&c| c != 0).map(|&c| c as u8).collect();
         String::from_utf8_lossy(&bytes).into_owned()
     };
-    Uname {
-        sysname: cstr(&buf.sysname),
-        release: cstr(&buf.release),
-        version: cstr(&buf.version),
-    }
+    Uname { sysname: cstr(&buf.sysname), release: cstr(&buf.release), version: cstr(&buf.version) }
 }

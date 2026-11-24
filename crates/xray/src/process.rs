@@ -59,9 +59,8 @@ impl XrayProcess {
         internal_socket_path: &str,
         internal_token: &str,
     ) -> Self {
-        let config_arg = format!(
-            "@{internal_socket_path}:/internal/get-config?token={internal_token}"
-        );
+        let config_arg =
+            format!("@{internal_socket_path}:/internal/get-config?token={internal_token}");
         let _ = xtls_api_socket_path;
         let (events, _) = watch::channel(ProcessEvent::Down);
         Self {
@@ -120,10 +119,7 @@ impl XrayProcess {
         if let Some(parent) = self.log_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let log = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.log_path)?;
+        let log = std::fs::OpenOptions::new().create(true).append(true).open(&self.log_path)?;
         let log_err = log.try_clone()?;
 
         let mut cmd = Command::new(&self.core_link);
@@ -135,17 +131,12 @@ impl XrayProcess {
             .stderr(Stdio::from(log_err))
             .kill_on_drop(true);
 
-        let child = cmd
-            .spawn()
-            .map_err(|e| ProcessError::Spawn(e.to_string()))?;
+        let child = cmd.spawn().map_err(|e| ProcessError::Spawn(e.to_string()))?;
         let pid = child.id().unwrap_or_default();
         info!("Xray process started (pid {pid})");
         state.child = Some(child);
         state.generation = state.generation.saturating_add(1);
-        self.events.send_replace(ProcessEvent::Up {
-            pid,
-            generation: state.generation,
-        });
+        self.events.send_replace(ProcessEvent::Up { pid, generation: state.generation });
         Ok(pid)
     }
 

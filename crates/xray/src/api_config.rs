@@ -1,9 +1,8 @@
 use std::collections::HashSet;
 
 use rw_contract::xray_constants::{
-    api_inbound_model, default_api_model, default_stats_model, merge_policy,
-    routing_rules_model, torrent_blocker_outbound_model, torrent_blocker_routing_rules_model,
-    XRAY_API_TAG,
+    api_inbound_model, default_api_model, default_stats_model, merge_policy, routing_rules_model,
+    torrent_blocker_outbound_model, torrent_blocker_routing_rules_model, XRAY_API_TAG,
 };
 use serde_json::{json, Map, Value};
 
@@ -47,11 +46,7 @@ pub fn generate_api_config(
     }
     result.insert("inbounds".into(), Value::Array(inbounds));
 
-    let outbounds = config
-        .get("outbounds")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+    let outbounds = config.get("outbounds").and_then(Value::as_array).cloned().unwrap_or_default();
     result.insert("outbounds".into(), Value::Array(outbounds));
 
     let policy = merge_policy(config.get("policy"), has_cap_net_admin);
@@ -71,11 +66,7 @@ pub fn generate_api_config(
             .filter(|rule| rule.get("outboundTag").and_then(Value::as_str) != Some(XRAY_API_TAG)),
     );
 
-    let mut routing = config
-        .get("routing")
-        .and_then(Value::as_object)
-        .cloned()
-        .unwrap_or_default();
+    let mut routing = config.get("routing").and_then(Value::as_object).cloned().unwrap_or_default();
     routing.insert("rules".into(), Value::Array(rules));
     result.insert("routing".into(), Value::Object(routing));
 
@@ -87,10 +78,8 @@ pub fn generate_api_config(
         }
 
         let rule = torrent_blocker_routing_rules_model(&webhook_url);
-        if let Some(rules) = result
-            .get_mut("routing")
-            .and_then(|r| r.get_mut("rules"))
-            .and_then(Value::as_array_mut)
+        if let Some(rules) =
+            result.get_mut("routing").and_then(|r| r.get_mut("rules")).and_then(Value::as_array_mut)
         {
             let index = resolve_rule_index(torrent_blocker.rule_position, rules.len());
             rules.insert(index, rule);
@@ -147,10 +136,7 @@ mod tests {
     #[test]
     fn injects_api_inbound_and_policy() {
         let mut config = Map::new();
-        config.insert(
-            "inbounds".into(),
-            json!([{ "tag": "user-in", "protocol": "vless" }]),
-        );
+        config.insert("inbounds".into(), json!([{ "tag": "user-in", "protocol": "vless" }]));
         let state = TorrentBlockerStateView {
             enabled: false,
             include_rule_tags: Default::default(),
@@ -164,19 +150,14 @@ mod tests {
         assert_eq!(result["api"]["tag"], "REMNAWAVE_API");
         assert_eq!(result["stats"], json!({}));
         assert_eq!(result["policy"]["levels"]["0"]["statsUserOnline"], true);
-        assert_eq!(
-            result["routing"]["rules"][0]["outboundTag"],
-            "REMNAWAVE_API"
-        );
+        assert_eq!(result["routing"]["rules"][0]["outboundTag"], "REMNAWAVE_API");
     }
 
     #[test]
     fn inserts_torrent_blocker_rule() {
         let mut config = Map::new();
-        config.insert(
-            "routing".into(),
-            json!({ "rules": [{ "ruleTag": "a" }, { "ruleTag": "b" }] }),
-        );
+        config
+            .insert("routing".into(), json!({ "rules": [{ "ruleTag": "a" }, { "ruleTag": "b" }] }));
         config.insert("outbounds".into(), json!([]));
         let state = TorrentBlockerStateView {
             enabled: true,

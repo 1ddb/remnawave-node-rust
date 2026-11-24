@@ -49,13 +49,7 @@ pub fn normalize_pem(pem: &str) -> String {
     let mut out = String::with_capacity(pem.len());
     for line in pem.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with("-----BEGIN") {
-            out.push_str(trimmed);
-            out.push('\n');
-        } else if trimmed.starts_with("-----END") {
-            out.push_str(trimmed);
-            out.push('\n');
-        } else if !trimmed.is_empty() {
+        if !trimmed.is_empty() {
             out.push_str(trimmed);
             out.push('\n');
         }
@@ -73,9 +67,7 @@ pub fn parse_node_payload(secret_key: &str) -> Result<NodePayload, PayloadError>
         .collect();
     let raw = BASE64
         .decode(&sanitized)
-        .or_else(|_| {
-            base64::engine::general_purpose::STANDARD_NO_PAD.decode(&sanitized)
-        })
+        .or_else(|_| base64::engine::general_purpose::STANDARD_NO_PAD.decode(&sanitized))
         .map_err(|_| PayloadError::InvalidEncoding)?;
     let parsed: NodePayload =
         serde_json::from_slice(&raw).map_err(|_| PayloadError::InvalidStructure)?;
@@ -115,8 +107,7 @@ pub fn derive_sni(ca_cert_pem: &str, jwt_public_key: &str) -> String {
 
     let hk = Hkdf::<Sha256>::new(None, &ikm);
     let mut okm = [0u8; 22];
-    hk.expand(HKDF_INFO, &mut okm)
-        .expect("22 bytes is a valid HKDF output length");
+    hk.expand(HKDF_INFO, &mut okm).expect("22 bytes is a valid HKDF output length");
 
     let host = hex(&okm[0..16]);
     let mid = hex(&okm[16..21]);
@@ -138,9 +129,7 @@ pub struct SniVerifier {
 
 impl SniVerifier {
     pub fn new(ca_cert_pem: &str, jwt_public_key: &str) -> Self {
-        Self {
-            expected: derive_sni(ca_cert_pem, jwt_public_key).into_bytes(),
-        }
+        Self { expected: derive_sni(ca_cert_pem, jwt_public_key).into_bytes() }
     }
 
     pub fn verify(&self, servername: &str) -> bool {
@@ -166,10 +155,7 @@ fn parse_cert(pem: &str) -> Result<CertificateDer<'static>, String> {
     let mut cursor = std::io::Cursor::new(pem.as_bytes());
     let certs = rustls_pemfile::certs(&mut cursor).collect::<Result<Vec<_>, _>>();
     match certs {
-        Ok(certs) => certs
-            .into_iter()
-            .next()
-            .ok_or_else(|| "no certificate found".to_string()),
+        Ok(certs) => certs.into_iter().next().ok_or_else(|| "no certificate found".to_string()),
         Err(e) => Err(e.to_string()),
     }
 }
@@ -190,19 +176,9 @@ pub fn ensure_crypto_provider() {
 pub fn run_payload_checks(payload: &NodePayload) -> Vec<PayloadCheck> {
     ensure_crypto_provider();
     let mut checks = Vec::new();
-    let mut add = |name: &'static str, fn_: &dyn Fn() -> Result<String, String>| {
-        match fn_() {
-            Ok(detail) => checks.push(PayloadCheck {
-                name,
-                ok: true,
-                detail,
-            }),
-            Err(detail) => checks.push(PayloadCheck {
-                name,
-                ok: false,
-                detail,
-            }),
-        }
+    let mut add = |name: &'static str, fn_: &dyn Fn() -> Result<String, String>| match fn_() {
+        Ok(detail) => checks.push(PayloadCheck { name, ok: true, detail }),
+        Err(detail) => checks.push(PayloadCheck { name, ok: false, detail }),
     };
 
     add("CA parses", &|| {
@@ -253,8 +229,7 @@ pub fn run_payload_checks(payload: &NodePayload) -> Vec<PayloadCheck> {
         let (_, ca) = parse_x509_certificate(ca_der.as_ref()).map_err(|e| e.to_string())?;
         let node_der = parse_cert(&payload.node_cert_pem)?;
         let (_, node) = parse_x509_certificate(node_der.as_ref()).map_err(|e| e.to_string())?;
-        node.verify_signature(Some(ca.public_key()))
-            .map_err(|e| e.to_string())?;
+        node.verify_signature(Some(ca.public_key())).map_err(|e| e.to_string())?;
         Ok("valid".into())
     });
 
@@ -326,9 +301,7 @@ fn required(name: &'static str) -> Result<String, ConfigError> {
 fn random_alnum(len: usize) -> String {
     const CHARS: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let mut rng = rand::thread_rng();
-    (0..len)
-        .map(|_| CHARS[rng.gen_range(0..CHARS.len())] as char)
-        .collect()
+    (0..len).map(|_| CHARS[rng.gen_range(0..CHARS.len())] as char).collect()
 }
 
 /// Reuses an existing value (from the environment or `/run/rw-node.env`) and
@@ -349,19 +322,15 @@ fn ensure_runtime_var(name: &str, generate: impl FnOnce() -> String) {
 /// reused so the CLI and a restarting instance keep talking to the same sockets.
 pub fn init_runtime_env() {
     ensure_runtime_var("INTERNAL_REST_TOKEN", || random_alnum(64));
-    ensure_runtime_var("INTERNAL_SOCKET_PATH", || {
-        format!("rwint-{}", random_alnum(10))
-    });
-    ensure_runtime_var("XTLS_API_SOCKET_PATH", || {
-        format!("xtls-api-{}", random_alnum(10))
-    });
+    ensure_runtime_var("INTERNAL_SOCKET_PATH", || format!("rwint-{}", random_alnum(10)));
+    ensure_runtime_var("XTLS_API_SOCKET_PATH", || format!("xtls-api-{}", random_alnum(10)));
     persist_runtime_env();
 }
 
 pub fn load() -> Result<AppConfig, ConfigError> {
-    let node_port: u16 = required("NODE_PORT")?
-        .parse()
-        .map_err(|e: std::num::ParseIntError| ConfigError::InvalidVar("NODE_PORT", e.to_string()))?;
+    let node_port: u16 = required("NODE_PORT")?.parse().map_err(|e: std::num::ParseIntError| {
+        ConfigError::InvalidVar("NODE_PORT", e.to_string())
+    })?;
     let secret_key = required("SECRET_KEY")?;
     let payload = parse_node_payload(&secret_key)?;
     let jwt_public_key = payload.jwt_public_key.clone();
@@ -379,39 +348,6 @@ pub fn load() -> Result<AppConfig, ConfigError> {
         sni_verification: bool_var("SNI_VERIFICATION", false)?,
         payload,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pem_normalization() {
-        let raw = "-----BEGIN CERTIFICATE-----\\nABC\\n-----END CERTIFICATE-----";
-        assert_eq!(
-            normalize_pem(raw),
-            "-----BEGIN CERTIFICATE-----\nABC\n-----END CERTIFICATE-----"
-        );
-    }
-
-    #[test]
-    fn secret_key_accepts_surrounding_quotes() {
-        let json = r#"{"caCertPem":"A","jwtPublicKey":"B","nodeCertPem":"C","nodeKeyPem":"D"}"#;
-        let encoded = BASE64.encode(json);
-        let payload = parse_node_payload(&format!("\"{encoded}\"")).unwrap();
-        assert_eq!(payload.ca_cert_pem, "A");
-        assert_eq!(payload.jwt_public_key, "B");
-        assert_eq!(payload.node_cert_pem, "C");
-        assert_eq!(payload.node_key_pem, "D");
-    }
-
-    #[test]
-    fn sni_is_stable() {
-        let a = derive_sni("CA", "JWT");
-        let b = derive_sni("CA", "JWT");
-        assert_eq!(a, b);
-        assert_eq!(a.rsplit('.').next().unwrap().len() <= 3, true);
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -461,10 +397,7 @@ pub fn persist_runtime_env() {
             let _ = std::fs::remove_file(&tmp_path);
             return;
         }
-        let _ = std::fs::set_permissions(
-            RUNTIME_ENV_FILE,
-            std::fs::Permissions::from_mode(0o600),
-        );
+        let _ = std::fs::set_permissions(RUNTIME_ENV_FILE, std::fs::Permissions::from_mode(0o600));
     }
     #[cfg(not(unix))]
     {
@@ -487,4 +420,37 @@ pub fn resolve_runtime_var(name: &str) -> Option<String> {
             None
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pem_normalization() {
+        let raw = "-----BEGIN CERTIFICATE-----\\nABC\\n-----END CERTIFICATE-----";
+        assert_eq!(
+            normalize_pem(raw),
+            "-----BEGIN CERTIFICATE-----\nABC\n-----END CERTIFICATE-----"
+        );
+    }
+
+    #[test]
+    fn secret_key_accepts_surrounding_quotes() {
+        let json = r#"{"caCertPem":"A","jwtPublicKey":"B","nodeCertPem":"C","nodeKeyPem":"D"}"#;
+        let encoded = BASE64.encode(json);
+        let payload = parse_node_payload(&format!("\"{encoded}\"")).unwrap();
+        assert_eq!(payload.ca_cert_pem, "A");
+        assert_eq!(payload.jwt_public_key, "B");
+        assert_eq!(payload.node_cert_pem, "C");
+        assert_eq!(payload.node_key_pem, "D");
+    }
+
+    #[test]
+    fn sni_is_stable() {
+        let a = derive_sni("CA", "JWT");
+        let b = derive_sni("CA", "JWT");
+        assert_eq!(a, b);
+        assert!(a.rsplit('.').next().unwrap().len() <= 3);
+    }
 }

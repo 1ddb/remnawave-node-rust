@@ -50,11 +50,7 @@ pub async fn internal_token(State(state): State<AppState>, req: Request, next: N
         query.split('&').find_map(|pair| {
             let (key, value) = pair.split_once('=')?;
             if key == "token" {
-                Some(
-                    percent_encoding::percent_decode_str(value)
-                        .decode_utf8_lossy()
-                        .into_owned(),
-                )
+                Some(percent_encoding::percent_decode_str(value).decode_utf8_lossy().into_owned())
             } else {
                 None
             }
@@ -100,15 +96,14 @@ pub async fn zstd_body(req: Request, next: Next) -> Response {
         Err(e) => return ApiError::internal(&parts.uri, e.to_string()).into_response(),
     };
 
-    let decoded = match tokio::task::spawn_blocking(move || {
-        decode_zstd_limited(&bytes, crate::MAX_BODY)
-    })
-    .await
-    {
-        Ok(Ok(decoded)) => decoded,
-        Ok(Err(e)) => return ApiError::internal(&parts.uri, e).into_response(),
-        Err(e) => return ApiError::internal(&parts.uri, e.to_string()).into_response(),
-    };
+    let decoded =
+        match tokio::task::spawn_blocking(move || decode_zstd_limited(&bytes, crate::MAX_BODY))
+            .await
+        {
+            Ok(Ok(decoded)) => decoded,
+            Ok(Err(e)) => return ApiError::internal(&parts.uri, e).into_response(),
+            Err(e) => return ApiError::internal(&parts.uri, e.to_string()).into_response(),
+        };
 
     parts.headers.remove(CONTENT_ENCODING);
     parts.headers.remove(CONTENT_LENGTH);
@@ -122,9 +117,7 @@ fn decode_zstd_limited(input: &[u8], limit: usize) -> Result<Vec<u8>, String> {
     let decoder = zstd::stream::read::Decoder::new(input).map_err(|e| e.to_string())?;
     let mut limited = decoder.take(limit as u64 + 1);
     let mut decoded = Vec::new();
-    limited
-        .read_to_end(&mut decoded)
-        .map_err(|e| e.to_string())?;
+    limited.read_to_end(&mut decoded).map_err(|e| e.to_string())?;
     if decoded.len() > limit {
         return Err(format!("decompressed body exceeds {limit} bytes"));
     }
@@ -142,10 +135,7 @@ pub async fn security_headers(req: Request, next: Next) -> Response {
         HeaderValue::from_static("max-age=15552000; includeSubDomains"),
     );
     headers.insert("referrer-policy", HeaderValue::from_static("no-referrer"));
-    headers.insert(
-        "cross-origin-opener-policy",
-        HeaderValue::from_static("same-origin"),
-    );
+    headers.insert("cross-origin-opener-policy", HeaderValue::from_static("same-origin"));
     response
 }
 
@@ -167,9 +157,6 @@ mod tests {
     fn rejects_decompressed_body_over_limit() {
         let compressed = zstd::encode_all(b"hello" as &[u8], 1).unwrap();
         assert!(decode_zstd_limited(&compressed, 4).is_err());
-        assert_eq!(
-            decode_zstd_limited(&compressed, 5).unwrap(),
-            b"hello".to_vec()
-        );
+        assert_eq!(decode_zstd_limited(&compressed, 5).unwrap(), b"hello".to_vec());
     }
 }

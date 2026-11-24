@@ -35,7 +35,7 @@ impl SharedList {
                 }
             }
             SharedList::AsList { items, .. } => {
-                if items.iter().any(|asn| *asn == 0) {
+                if items.contains(&0) {
                     return Err(format!("shared list \"{name}\" contains ASN 0"));
                 }
             }
@@ -108,9 +108,7 @@ impl ConnectionDropPlugin {
     fn validate(&self) -> Result<(), String> {
         for ip in &self.whitelist_ips {
             if !is_ip_or_ext(ip) {
-                return Err(format!(
-                    "connectionDrop.whitelistIps contains invalid IP \"{ip}\""
-                ));
+                return Err(format!("connectionDrop.whitelistIps contains invalid IP \"{ip}\""));
             }
         }
         Ok(())
@@ -128,9 +126,7 @@ impl IngressFilterPlugin {
     fn validate(&self) -> Result<(), String> {
         for ip in &self.blocked_ips {
             if !is_ip_cidr_or_ext(ip) {
-                return Err(format!(
-                    "ingressFilter.blockedIps contains invalid IP/CIDR \"{ip}\""
-                ));
+                return Err(format!("ingressFilter.blockedIps contains invalid IP/CIDR \"{ip}\""));
             }
         }
         Ok(())
@@ -158,7 +154,7 @@ impl EgressFilterPlugin {
             }
         }
         if let Some(ports) = &self.blocked_ports {
-            if ports.iter().any(|port| *port == 0) {
+            if ports.contains(&0) {
                 return Err("egressFilter.blockedPorts must be between 1 and 65535".into());
             }
         }
@@ -257,19 +253,14 @@ impl NodePlugin {
         let mut plugin: NodePlugin = serde_json::from_value(Value::Object(config.clone()))?;
         plugin.normalize();
         Self::validate(&plugin).map_err(|message| {
-            serde_json::Error::io(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                message,
-            ))
+            serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, message))
         })?;
         Ok(plugin)
     }
 
     fn normalize(&mut self) {
-        if let Some(cleanup) = self
-            .pre_start
-            .as_mut()
-            .and_then(|plugin| plugin.cleanup_sockets.as_mut())
+        if let Some(cleanup) =
+            self.pre_start.as_mut().and_then(|plugin| plugin.cleanup_sockets.as_mut())
         {
             for file in &mut cleanup.files {
                 *file = file.trim().to_string();
@@ -345,14 +336,11 @@ fn is_url(value: &str) -> bool {
     };
     !scheme.is_empty()
         && !rest.is_empty()
-        && scheme
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+        && scheme.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
 }
 
 fn is_http_url(value: &str) -> bool {
-    is_url(value)
-        && (value.starts_with("http://") || value.starts_with("https://"))
+    is_url(value) && (value.starts_with("http://") || value.starts_with("https://"))
 }
 
 #[cfg(test)]

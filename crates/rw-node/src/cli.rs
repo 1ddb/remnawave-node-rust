@@ -66,7 +66,10 @@ fn dump_config(raw: bool) -> Result<(), String> {
 
     let (status, body) = request_over_socket(
         &socket_path,
-        &format!("/internal/get-config?token={}", percent_encoding::utf8_percent_encode(&token, percent_encoding::NON_ALPHANUMERIC)),
+        &format!(
+            "/internal/get-config?token={}",
+            percent_encoding::utf8_percent_encode(&token, percent_encoding::NON_ALPHANUMERIC)
+        ),
     )?;
 
     if status != 200 {
@@ -83,7 +86,7 @@ fn dump_config(raw: bool) -> Result<(), String> {
 
     let value: serde_json::Value =
         serde_json::from_str(&body).map_err(|e| format!("Invalid JSON: {e}"))?;
-    if value.as_object().map_or(false, |o| o.is_empty()) {
+    if value.as_object().is_some_and(|o| o.is_empty()) {
         eprintln!("Configuration is empty.");
         return Ok(());
     }
@@ -97,26 +100,19 @@ fn request_over_socket(socket_path: &str, path: &str) -> Result<(u16, String), S
     let addr = std::os::unix::net::SocketAddr::from_abstract_name(socket_path.as_bytes())
         .map_err(|e| e.to_string())?;
     let mut stream = UnixStream::connect_addr(&addr).map_err(|e| e.to_string())?;
-    stream
-        .set_read_timeout(Some(std::time::Duration::from_secs(5)))
-        .ok();
+    stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).ok();
 
     let request = format!(
         "GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nAccept: application/json\r\n\r\n"
     );
-    stream
-        .write_all(request.as_bytes())
-        .map_err(|e| e.to_string())?;
+    stream.write_all(request.as_bytes()).map_err(|e| e.to_string())?;
 
     let mut response = Vec::new();
-    stream
-        .read_to_end(&mut response)
-        .map_err(|e| e.to_string())?;
+    stream.read_to_end(&mut response).map_err(|e| e.to_string())?;
     let text = String::from_utf8_lossy(&response).into_owned();
 
-    let (head, body) = text
-        .split_once("\r\n\r\n")
-        .ok_or_else(|| "malformed HTTP response".to_string())?;
+    let (head, body) =
+        text.split_once("\r\n\r\n").ok_or_else(|| "malformed HTTP response".to_string())?;
     let status = head
         .lines()
         .next()
@@ -132,13 +128,9 @@ fn kill_sockets(ip: Option<String>) -> Result<(), String> {
         Some(ip) => ip,
         None => {
             eprint!("Enter IP address to kill sockets for: ");
-            std::io::stdout()
-                .flush()
-                .map_err(|e| e.to_string())?;
+            std::io::stdout().flush().map_err(|e| e.to_string())?;
             let mut buf = String::new();
-            std::io::stdin()
-                .read_line(&mut buf)
-                .map_err(|e| e.to_string())?;
+            std::io::stdin().read_line(&mut buf).map_err(|e| e.to_string())?;
             let trimmed = buf.trim();
             if trimmed.is_empty() {
                 return Err("IP address is required".into());

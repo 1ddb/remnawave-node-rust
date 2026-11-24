@@ -18,14 +18,6 @@ impl HashedSet {
         Self::default()
     }
 
-    pub fn from_iter<I: IntoIterator<Item = String>>(iter: I) -> Self {
-        let mut set = Self::new();
-        for item in iter {
-            set.add(item);
-        }
-        set
-    }
-
     pub fn len(&self) -> usize {
         self.inner.len()
     }
@@ -80,11 +72,7 @@ impl HashedSet {
     }
 
     pub fn hash64_string(&self) -> String {
-        format!(
-            "{}{}",
-            js_i32_hex(self.hash_high as i32),
-            js_i32_hex(self.hash_low as i32)
-        )
+        format!("{}{}", js_i32_hex(self.hash_high as i32), js_i32_hex(self.hash_low as i32))
     }
 
     pub fn has_same_hash(&self, other: &Self) -> bool {
@@ -101,6 +89,14 @@ impl Extend<String> for HashedSet {
         for item in iter {
             self.add(item);
         }
+    }
+}
+
+impl FromIterator<String> for HashedSet {
+    fn from_iter<I: IntoIterator<Item = String>>(iter: I) -> Self {
+        let mut set = Self::new();
+        set.extend(iter);
+        set
     }
 }
 
@@ -129,10 +125,8 @@ fn djb2_dual(s: &str) -> (u32, u32) {
     // JS iterates UTF-16 code units; `encode_utf16` reproduces that exactly.
     for unit in s.encode_utf16() {
         let ch = unit as i32;
-        high = ((high << 5).wrapping_add(high).wrapping_add(ch)) as i32;
-        low = ((low << 6)
-            .wrapping_add(low)
-            .wrapping_add(ch.wrapping_mul(37))) as i32;
+        high = (high << 5).wrapping_add(high).wrapping_add(ch);
+        low = (low << 6).wrapping_add(low).wrapping_add(ch.wrapping_mul(37));
     }
 
     (high as u32, low as u32)

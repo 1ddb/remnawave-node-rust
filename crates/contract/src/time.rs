@@ -39,9 +39,7 @@ mod tests {
 
     #[test]
     fn serializes_with_milliseconds() {
-        let wrapper = Wrapper {
-            at: Utc.with_ymd_and_hms(2026, 1, 2, 3, 4, 5).unwrap(),
-        };
+        let wrapper = Wrapper { at: Utc.with_ymd_and_hms(2026, 1, 2, 3, 4, 5).unwrap() };
         let json = serde_json::to_value(&wrapper).unwrap();
         assert_eq!(json["at"], "2026-01-02T03:04:05.000Z");
     }
