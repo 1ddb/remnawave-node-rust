@@ -1,12 +1,10 @@
 # Remnawave Node (Rust)
 
 Rust reimplementation of [`remnawave/node`](https://github.com/remnawave/node),
-API-compatible with `node` 3.4.3 (upstream commit `2ad154f`). This is the agent
-that runs on every node and is controlled by the Remnawave Panel.
+API-compatible with `node` 3.4.3 (upstream commit `2ad154f`). Drop-in
+replacement for the agent controlled by the Remnawave Panel.
 
 ## Node.js vs Rust
-
-A drop-in reimplementation of the upstream Node.js agent:
 
 | Metric | Node.js (upstream) | Rust (this project) |
 |---|---|---|
@@ -27,28 +25,62 @@ content size**.
 - Internal HTTP API on an abstract unix socket with token authentication.
 - Xray Core supervisor: process spawn, crash detection, exponential backoff
   (1–30 s) and log capture in `/var/log/xray/current`.
-- gRPC client for the Xray API over an abstract unix socket.
-- User handlers, online/traffic statistics, geocheck, plugins and nftables.
+- gRPC client for the Xray API, user handlers, statistics, geocheck, plugins
+  and nftables.
 - Custom Xray core and geodata assets with SHA-256 verification and atomic
   installation.
 - Built-in CLI for config dumps and socket management.
 
 ## Requirements
 
-- Linux with abstract unix socket and nftables support.
-- Rust 1.85 or newer.
-- Runtime privileges:
-  - `NET_ADMIN` for nftables;
-  - `/dev/net/tun` for TUN inbounds;
-  - write access to `/usr/local/bin`, `/var/log/xray`, `/run` and
-    `/usr/local/share`.
+- Linux with nftables and abstract unix sockets.
+- Debian 12+ or Ubuntu 22.04+ for the `.deb` package.
+- `NET_ADMIN` for nftables and `/dev/net/tun` for TUN inbounds.
+- Write access to `/usr/local/bin`, `/var/log/xray`, `/run` and
+  `/usr/local/share`.
+
+## Migration
+
+The agent is a drop-in replacement: keep the existing `.env` (`NODE_PORT`,
+`SECRET_KEY` and optional variables).
+
+### Docker Compose
+
+Replace the `image` in `docker-compose.yml`:
+
+```yaml
+services:
+  remnanode:
+    image: ghcr.io/1ddb/remnawave-node-rust:latest
+```
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+For a new installation, copy [`docker-compose.yml`](docker-compose.yml) and
+[`.env.sample`](.env.sample) first; `SECRET_KEY` is available in the Panel under
+the node settings or when creating the node.
+
+### Debian package (optional)
+
+```bash
+docker compose down
+curl -fsSLO "https://github.com/1ddb/remnawave-node-rust/releases/download/v3.4.3/rw-node_3.4.3-1_$(dpkg --print-architecture).deb"
+sudo apt install "./rw-node_3.4.3-1_$(dpkg --print-architecture).deb"
+sudoedit /etc/rw-node/env   # paste SECRET_KEY from the Panel
+sudo systemctl enable --now rw-node
+```
+
+The package bundles Xray Core, geodata, the ASN database and geocheck.
 
 ## Configuration
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
 | `NODE_PORT` | yes | — | HTTPS API port. |
-| `SECRET_KEY` | yes | — | Base64-encoded JSON payload from the Panel. |
+| `SECRET_KEY` | yes | — | Base64-encoded JSON with certificates and the JWT public key from the Panel. |
 | `SNI_VERIFICATION` | no | `false` | Enforce the derived SNI on TLS handshakes. |
 | `DISABLE_HASHED_SET_CHECK` | no | `false` | Disable the hashed-set config change check. |
 | `NFTABLES_LOGGING` | no | `true` | Enable nftables rule logging. |
@@ -62,100 +94,24 @@ content size**.
 | `INTERNAL_SOCKET_PATH` | no | generated | Abstract unix socket for the internal API. |
 | `XTLS_API_SOCKET_PATH` | no | generated | Abstract unix socket for the Xray gRPC API. |
 
-`SECRET_KEY` is a base64-encoded JSON object with the following fields:
-
-```json
-{
-  "caCertPem": "-----BEGIN CERTIFICATE-----\n...",
-  "jwtPublicKey": "-----BEGIN PUBLIC KEY-----\n...",
-  "nodeCertPem": "-----BEGIN CERTIFICATE-----\n...",
-  "nodeKeyPem": "-----BEGIN PRIVATE KEY-----\n..."
-}
-```
-
-The Panel provides this value when a node is created.
-
 `INTERNAL_REST_TOKEN`, `INTERNAL_SOCKET_PATH` and `XTLS_API_SOCKET_PATH` are
 generated on first start and persisted in `/run/rw-node.env` with mode `0600`,
 so the CLI and restarted instances keep using the same values.
 
 See [`.env.sample`](.env.sample) for a ready-to-copy template.
 
-## Running locally
-
-```bash
-export NODE_PORT=8443
-export SECRET_KEY='<base64 JSON payload>'
-export RUST_LOG=info
-
-cargo run --release -p rw-node
-```
-
-The process needs write access to `/run` for the runtime env file. nftables and
-the Xray core installation also require elevated privileges.
-
 ## CLI
 
 The CLI is available as `rw-node cli <command>` or through the `cli` symlink in
-the container.
+the container. For the `.deb` install, load the service environment first:
+`source /etc/rw-node/env`.
 
 ```bash
-cargo run --release -p rw-node -- cli --help
-cargo run --release -p rw-node -- cli --dump-config
-cargo run --release -p rw-node -- cli --dump-config-raw
-cargo run --release -p rw-node -- cli --kill-sockets 203.0.113.10
+rw-node cli --help
+rw-node cli --dump-config
+rw-node cli --dump-config-raw
+rw-node cli --kill-sockets 203.0.113.10
 ```
-
-## Docker
-
-The image is built with BuildKit. Buildx with cache mounts is recommended:
-
-```bash
-docker buildx build -f docker/Dockerfile -t remnawave/node:rust --load .
-```
-
-For multi-platform builds use `docker-bake.hcl`; it requires a
-`docker-container` builder and QEMU/binfmt emulation:
-
-```bash
-docker buildx bake -f docker-bake.hcl
-```
-
-Example run:
-
-```bash
-docker run -d \
-  --name remnanode \
-  --network host \
-  --restart always \
-  --cap-add NET_ADMIN \
-  --device /dev/net/tun \
-  --ulimit nofile=1048576:1048576 \
-  --env-file .env \
-  -e NODE_PORT=2222 \
-  remnawave/node:rust
-```
-
-## Debian package
-
-A `debian/` source package is included. It builds `rw-node` together with the
-bundled Xray core, geodata, ASN database and geocheck. The build downloads those
-artifacts from GitHub, so network access is required.
-
-```bash
-sudo apt install debhelper build-essential cargo rustc cmake curl perl unzip zstd
-dpkg-buildpackage -us -uc -b
-sudo apt install ./rw-node_*.deb
-sudoedit /etc/rw-node/env
-sudo systemctl enable --now rw-node
-```
-
-If `cargo`/`rustc` are installed through rustup rather than apt, pass `-d` to
-`dpkg-buildpackage` to skip the build-dependency check.
-
-The systemd unit reads `/etc/rw-node/env`. Runtime tokens and abstract socket
-names are still generated into `/run/rw-node.env`. The service is not enabled or
-started automatically during installation.
 
 ## Runtime files
 
@@ -172,29 +128,7 @@ started automatically during installation.
 
 ## Development
 
-```bash
-cargo check --workspace
-cargo test --workspace --lib --bins
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo deny check
-```
-
-## Project layout
-
-```
-crates/
-├── rw-node/         # binary, CLI, instance lock, runtime env
-├── http/            # axum routers, mTLS, JWT, internal API
-├── contract/        # routes, error codes, DTOs, Xray constants
-├── config/          # SECRET_KEY decoding, PEM, SNI, env
-├── core/            # system/network stats, downloads, webhooks
-├── xray-rpc/        # tonic client and vendored protobufs
-├── xray/            # Xray supervisor, core loader, geodata, service
-├── hashed-set/      # exact port of @remnawave/hashed-set
-├── node-plugins/    # plugin state, nftables, torrent blocker
-└── asn-lmdb/        # read-only ASN LMDB lookup
-```
+Build instructions and project layout: [`DEVELOPMENT.md`](DEVELOPMENT.md).
 
 ## License
 

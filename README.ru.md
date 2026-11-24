@@ -1,12 +1,10 @@
 # Remnawave Node (Rust)
 
 Rust-реимплементация [`remnawave/node`](https://github.com/remnawave/node),
-совместимая по API с `node` 3.4.3 (upstream-коммит `2ad154f`). Это агент, который
-запускается на каждой ноде и управляется панелью Remnawave.
+совместимая по API с `node` 3.4.3 (upstream-коммит `2ad154f`). Полноценная
+замена агента, которым управляет панель Remnawave.
 
 ## Node.js vs Rust
-
-Полноценная замена оригинального Node.js-агента:
 
 | Метрика | Node.js (upstream) | Rust (этот проект) |
 |---|---|---|
@@ -27,28 +25,61 @@ Node.js-версия, а Docker-образ примерно **в 2.9 раза м
 - Внутренний HTTP API на абстрактном unix-сокете с токен-аутентификацией.
 - Супервизор Xray Core: запуск процесса, отслеживание падений, экспоненциальный
   backoff (1–30 с) и запись логов в `/var/log/xray/current`.
-- gRPC-клиент Xray API через абстрактный unix-сокет.
-- Обработчики пользователей, статистика онлайна и трафика, geocheck, плагины и
-  nftables.
+- gRPC-клиент Xray API, обработчики пользователей, статистика, geocheck,
+  плагины и nftables.
 - Кастомное ядро Xray и geodata с проверкой SHA-256 и атомарной установкой.
 - Встроенный CLI для дампа конфигурации и работы с сокетами.
 
 ## Требования
 
-- Linux с поддержкой абстрактных unix-сокетов и nftables.
-- Rust 1.85 или новее.
-- Привилегии во время работы:
-  - `NET_ADMIN` для nftables;
-  - `/dev/net/tun` для TUN-инбаундов;
-  - права на запись в `/usr/local/bin`, `/var/log/xray`, `/run` и
-    `/usr/local/share`.
+- Linux с nftables и абстрактными unix-сокетами.
+- Debian 12+ или Ubuntu 22.04+ для `.deb`-пакета.
+- `NET_ADMIN` для nftables и `/dev/net/tun` для TUN-инбаундов.
+- Права на запись в `/usr/local/bin`, `/var/log/xray`, `/run` и
+  `/usr/local/share`.
+
+## Миграция
+
+Агент полностью заменяет Node.js-версию: существующий `.env` (`NODE_PORT`,
+`SECRET_KEY` и опциональные переменные) менять не нужно.
+
+### Docker Compose
+
+Замените `image` в `docker-compose.yml`:
+
+```yaml
+services:
+  remnanode:
+    image: ghcr.io/1ddb/remnawave-node-rust:latest
+```
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+Для новой установки сначала скопируйте [`docker-compose.yml`](docker-compose.yml)
+и [`.env.sample`](.env.sample); `SECRET_KEY` берётся в настройках ноды в панели
+или при её создании.
+
+### Debian-пакет (опционально)
+
+```bash
+docker compose down
+curl -fsSLO "https://github.com/1ddb/remnawave-node-rust/releases/download/v3.4.3/rw-node_3.4.3-1_$(dpkg --print-architecture).deb"
+sudo apt install "./rw-node_3.4.3-1_$(dpkg --print-architecture).deb"
+sudoedit /etc/rw-node/env   # вставьте SECRET_KEY из панели
+sudo systemctl enable --now rw-node
+```
+
+Пакет включает ядро Xray, геоданные, базу ASN и geocheck.
 
 ## Конфигурация
 
 | Переменная | Обязательна | По умолчанию | Описание |
 | --- | --- | --- | --- |
 | `NODE_PORT` | да | — | Порт HTTPS API. |
-| `SECRET_KEY` | да | — | Base64-encoded JSON из панели. |
+| `SECRET_KEY` | да | — | Base64-encoded JSON с сертификатами и JWT public key из панели. |
 | `SNI_VERIFICATION` | нет | `false` | Проверять вычисленный SNI при TLS-хендшейке. |
 | `DISABLE_HASHED_SET_CHECK` | нет | `false` | Отключить проверку изменений hashed-set. |
 | `NFTABLES_LOGGING` | нет | `true` | Включить логирование правил nftables. |
@@ -62,99 +93,24 @@ Node.js-версия, а Docker-образ примерно **в 2.9 раза м
 | `INTERNAL_SOCKET_PATH` | нет | генерируется | Абстрактный unix-сокет внутреннего API. |
 | `XTLS_API_SOCKET_PATH` | нет | генерируется | Абстрактный unix-сокет gRPC API Xray. |
 
-`SECRET_KEY` — это base64-encoded JSON со следующими полями:
-
-```json
-{
-  "caCertPem": "-----BEGIN CERTIFICATE-----\n...",
-  "jwtPublicKey": "-----BEGIN PUBLIC KEY-----\n...",
-  "nodeCertPem": "-----BEGIN CERTIFICATE-----\n...",
-  "nodeKeyPem": "-----BEGIN PRIVATE KEY-----\n..."
-}
-```
-
-Панель выдаёт это значение при создании ноды.
-
 `INTERNAL_REST_TOKEN`, `INTERNAL_SOCKET_PATH` и `XTLS_API_SOCKET_PATH`
 генерируются при первом запуске и сохраняются в `/run/rw-node.env` с правами
 `0600`, чтобы CLI и перезапущенный процесс использовали те же значения.
 
 Готовый шаблон — в [`.env.sample`](.env.sample).
 
-## Локальный запуск
-
-```bash
-export NODE_PORT=8443
-export SECRET_KEY='<base64 JSON payload>'
-export RUST_LOG=info
-
-cargo run --release -p rw-node
-```
-
-Процессу нужен доступ на запись в `/run` для runtime env-файла. Для nftables и
-установки ядра Xray также требуются повышенные привилегии.
-
 ## CLI
 
 CLI доступен как `rw-node cli <команда>` или через симлинк `cli` в контейнере.
+Для `.deb`-установки сначала загрузите окружение сервиса:
+`source /etc/rw-node/env`.
 
 ```bash
-cargo run --release -p rw-node -- cli --help
-cargo run --release -p rw-node -- cli --dump-config
-cargo run --release -p rw-node -- cli --dump-config-raw
-cargo run --release -p rw-node -- cli --kill-sockets 203.0.113.10
+rw-node cli --help
+rw-node cli --dump-config
+rw-node cli --dump-config-raw
+rw-node cli --kill-sockets 203.0.113.10
 ```
-
-## Docker
-
-Образ собирается через BuildKit. Рекомендуется buildx с cache mounts:
-
-```bash
-docker buildx build -f docker/Dockerfile -t remnawave/node:rust --load .
-```
-
-Для multi-platform сборки используйте `docker-bake.hcl`; нужен драйвер
-`docker-container` и эмуляция QEMU/binfmt:
-
-```bash
-docker buildx bake -f docker-bake.hcl
-```
-
-Пример запуска:
-
-```bash
-docker run -d \
-  --name remnanode \
-  --network host \
-  --restart always \
-  --cap-add NET_ADMIN \
-  --device /dev/net/tun \
-  --ulimit nofile=1048576:1048576 \
-  --env-file .env \
-  -e NODE_PORT=2222 \
-  remnawave/node:rust
-```
-
-## Debian-пакет
-
-В репозитории есть сборочный каталог `debian/`. Пакет ставит `rw-node` вместе
-с ядром Xray, геоданными, базой ASN и geocheck. При сборке эти артефакты
-скачиваются с GitHub, поэтому нужен доступ в сеть.
-
-```bash
-sudo apt install debhelper build-essential cargo rustc cmake curl perl unzip zstd
-dpkg-buildpackage -us -uc -b
-sudo apt install ./rw-node_*.deb
-sudoedit /etc/rw-node/env
-sudo systemctl enable --now rw-node
-```
-
-Если `cargo`/`rustc` установлены через rustup, а не через apt, передайте `-d`
-в `dpkg-buildpackage`, чтобы пропустить проверку build-dependencies.
-
-Systemd-юнит читает `/etc/rw-node/env`. Runtime-токены и имена абстрактных
-сокетов по-прежнему генерируются в `/run/rw-node.env`. При установке сервис не
-включается и не запускается автоматически.
 
 ## Runtime-файлы
 
@@ -171,29 +127,8 @@ Systemd-юнит читает `/etc/rw-node/env`. Runtime-токены и име
 
 ## Разработка
 
-```bash
-cargo check --workspace
-cargo test --workspace --lib --bins
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo deny check
-```
-
-## Структура проекта
-
-```
-crates/
-├── rw-node/         # бинарник, CLI, instance-lock, runtime env
-├── http/            # axum-роутеры, mTLS, JWT, внутренний API
-├── contract/        # маршруты, коды ошибок, DTO, константы Xray
-├── config/          # декодирование SECRET_KEY, PEM, SNI, env
-├── core/            # системная/сетевая статистика, загрузки, webhook
-├── xray-rpc/        # tonic-клиент и вендоренные protobuf-файлы
-├── xray/            # супервизор Xray, core loader, geodata, service
-├── hashed-set/      # точный порт @remnawave/hashed-set
-├── node-plugins/    # состояние плагинов, nftables, torrent blocker
-└── asn-lmdb/        # read-only поиск по ASN LMDB
-```
+Инструкции по сборке и структура проекта: [`DEVELOPMENT.md`](DEVELOPMENT.md)
+(на английском).
 
 ## Лицензия
 
