@@ -154,7 +154,7 @@ jobs:
         run: |
           mkdir -p /tmp/digests
           digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
+          touch "/tmp/digests/${{ matrix.arch }}-${digest#sha256:}"
       - uses: actions/upload-artifact@v7
         with:
           name: digest-${{ matrix.arch }}
@@ -193,12 +193,33 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(github.ref_name, '-') }}
             type=semver,pattern={{major}},enable=${{ !contains(github.ref_name, '-') }}
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+      - name: Create per-architecture manifests and push
+        working-directory: /tmp/digests
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          for file in *; do
+            arch="${file%%-*}"
+            digest="${file#*-}"
+            args=()
+            while IFS= read -r tag; do
+              [ -n "$tag" ] && args+=("-t" "${tag}-${arch}")
+            done <<< "$TAGS"
+            docker buildx imagetools create "${args[@]}" \
+              "ghcr.io/${{ github.repository }}@sha256:${digest}"
+          done
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
+          set -euo pipefail
+          sources=()
+          for file in *; do
+            sources+=("ghcr.io/${{ github.repository }}@sha256:${file#*-}")
+          done
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
+            "${sources[@]}"
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
