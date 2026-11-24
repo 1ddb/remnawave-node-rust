@@ -1,7 +1,7 @@
 # Remnawave Node (Rust)
 
 Rust reimplementation of [`remnawave/node`](https://github.com/remnawave/node),
-API-compatible with `node` 3.4.3 (upstream commit `2ad154f`). Drop-in
+API-compatible with `node` 3.4.6 (upstream commit `52d0f1c`). Drop-in
 replacement for the agent controlled by the Remnawave Panel.
 
 ## Node.js vs Rust
@@ -67,8 +67,8 @@ the node settings or when creating the node.
 
 ```bash
 docker compose down
-curl -fsSLO "https://github.com/1ddb/remnawave-node-rust/releases/download/v3.4.3/rw-node_3.4.3-1_$(dpkg --print-architecture).deb"
-sudo apt install "./rw-node_3.4.3-1_$(dpkg --print-architecture).deb"
+curl -fsSLO "https://github.com/1ddb/remnawave-node-rust/releases/download/v3.4.6/rw-node_3.4.6-1_$(dpkg --print-architecture).deb"
+sudo apt install "./rw-node_3.4.6-1_$(dpkg --print-architecture).deb"
 sudoedit /etc/rw-node/env   # paste SECRET_KEY from the Panel
 sudo systemctl enable --now rw-node
 ```
