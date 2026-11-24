@@ -10,6 +10,7 @@ use thiserror::Error;
 use tokio::net::UnixStream;
 use tonic::transport::{Channel, Endpoint};
 
+#[allow(clippy::result_large_err)]
 pub mod xray {
     pub mod common {
         pub mod serial {
