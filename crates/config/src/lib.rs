@@ -265,6 +265,7 @@ pub struct AppConfig {
     pub nftables_accept_reply_traffic: bool,
     pub nftables_table_name: String,
     pub sni_verification: bool,
+    pub suppress_duplicate_instance_warning: bool,
     pub payload: NodePayload,
 }
 
@@ -367,6 +368,10 @@ pub fn load() -> Result<AppConfig, ConfigError> {
         nftables_accept_reply_traffic: bool_var("NFTABLES_ACCEPT_REPLY_TRAFFIC", false)?,
         nftables_table_name: table_name_var("NFTABLES_TABLE_NAME")?,
         sni_verification: bool_var("SNI_VERIFICATION", false)?,
+        suppress_duplicate_instance_warning: bool_var(
+            "SUPPRESS_DUPLICATE_INSTANCE_WARNING",
+            false,
+        )?,
         payload,
     })
 }

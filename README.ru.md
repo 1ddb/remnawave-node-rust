@@ -54,6 +54,7 @@ Node.js-версия, а Docker-образ примерно **в 2.9 раза м
 | `NFTABLES_LOGGING` | нет | `true` | Включить логирование правил nftables. |
 | `NFTABLES_ACCEPT_REPLY_TRAFFIC` | нет | `false` | Принимать reply-трафик в правилах nftables. |
 | `NFTABLES_TABLE_NAME` | нет | `remnanode` | Имя таблицы nftables; для IPv6 используется суффикс `6`. |
+| `SUPPRESS_DUPLICATE_INSTANCE_WARNING` | нет | `false` | Не предупреждать о втором node в том же network namespace. |
 | `XRAY_LOCATION_ASSET` | нет | `/usr/local/share/xray` | Каталог geodata-ассетов Xray. |
 | `RUST_LOG` | нет | `info` | Фильтр `tracing` (`debug` при `NODE_ENV=development`). |
 | `NODE_ENV` | нет | `production` | Укажите `development` для debug-логов. |
