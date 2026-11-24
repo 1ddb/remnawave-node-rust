@@ -264,7 +264,7 @@ pub async fn user_ip_list(
             last_seen: DateTime::<Utc>::from_timestamp(ts, 0).unwrap_or_else(Utc::now),
         })
         .collect();
-    ips.sort_by(|a, b| b.last_seen.cmp(&a.last_seen));
+    ips.sort_by_key(|ip| std::cmp::Reverse(ip.last_seen));
 
     Ok(Json(UserIpListResponse { response: UserIpListResponseData { ips } }))
 }
