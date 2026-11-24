@@ -47,6 +47,9 @@ jobs:
             arch: arm64
     runs-on: ${{ matrix.runner }}
     container: rust:1.100-bookworm
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v7
       - name: Install build dependencies
