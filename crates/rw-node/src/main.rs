@@ -85,6 +85,7 @@ fn main() {
                 disable_hashed_set_check: config.disable_hashed_set_check,
                 nftables_logging: config.nftables_logging,
                 nftables_accept_reply_traffic: config.nftables_accept_reply_traffic,
+                nftables_table_name: config.nftables_table_name.clone(),
                 core_link: rw_xray::process::CORE_LINK.to_string(),
             },
             network.clone(),

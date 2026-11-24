@@ -263,6 +263,7 @@ pub struct AppConfig {
     pub xtls_api_socket_path: String,
     pub nftables_logging: bool,
     pub nftables_accept_reply_traffic: bool,
+    pub nftables_table_name: String,
     pub sni_verification: bool,
     pub payload: NodePayload,
 }
@@ -275,6 +276,32 @@ pub enum ConfigError {
     InvalidVar(&'static str, String),
     #[error(transparent)]
     Payload(#[from] PayloadError),
+}
+
+const DEFAULT_NFTABLES_TABLE_NAME: &str = "remnanode";
+const NFTABLES_TABLE_NAME_MAX_LEN: usize = 63;
+
+fn parse_table_name(value: &str) -> Result<String, String> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Ok(DEFAULT_NFTABLES_TABLE_NAME.to_string());
+    }
+
+    let mut chars = value.chars();
+    let valid_start = chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_');
+    let valid_rest = chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    if !valid_start || !valid_rest || value.len() > NFTABLES_TABLE_NAME_MAX_LEN {
+        return Err(value.to_string());
+    }
+
+    Ok(value.to_string())
+}
+
+fn table_name_var(name: &'static str) -> Result<String, ConfigError> {
+    match std::env::var(name) {
+        Ok(value) => parse_table_name(&value).map_err(|value| ConfigError::InvalidVar(name, value)),
+        Err(_) => Ok(DEFAULT_NFTABLES_TABLE_NAME.to_string()),
+    }
 }
 
 fn bool_var(name: &'static str, default: bool) -> Result<bool, ConfigError> {
@@ -338,6 +365,7 @@ pub fn load() -> Result<AppConfig, ConfigError> {
         xtls_api_socket_path: required("XTLS_API_SOCKET_PATH")?,
         nftables_logging: bool_var("NFTABLES_LOGGING", true)?,
         nftables_accept_reply_traffic: bool_var("NFTABLES_ACCEPT_REPLY_TRAFFIC", false)?,
+        nftables_table_name: table_name_var("NFTABLES_TABLE_NAME")?,
         sni_verification: bool_var("SNI_VERIFICATION", false)?,
         payload,
     })
@@ -437,6 +465,17 @@ mod tests {
         assert_eq!(payload.jwt_public_key, "B");
         assert_eq!(payload.node_cert_pem, "C");
         assert_eq!(payload.node_key_pem, "D");
+    }
+
+    #[test]
+    fn nftables_table_name_is_validated() {
+        assert_eq!(parse_table_name(""), Ok("remnanode".to_string()));
+        assert_eq!(parse_table_name("  remnanode  "), Ok("remnanode".to_string()));
+        assert_eq!(parse_table_name("custom_node-1"), Ok("custom_node-1".to_string()));
+        assert!(parse_table_name("1node").is_err());
+        assert!(parse_table_name("-node").is_err());
+        assert!(parse_table_name("node name").is_err());
+        assert!(parse_table_name(&"a".repeat(64)).is_err());
     }
 
     #[test]

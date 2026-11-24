@@ -53,6 +53,7 @@ content size**.
 | `DISABLE_HASHED_SET_CHECK` | no | `false` | Disable the hashed-set config change check. |
 | `NFTABLES_LOGGING` | no | `true` | Enable nftables rule logging. |
 | `NFTABLES_ACCEPT_REPLY_TRAFFIC` | no | `false` | Accept reply traffic in nftables rules. |
+| `NFTABLES_TABLE_NAME` | no | `remnanode` | nftables table name; IPv6 uses a `6` suffix. |
 | `XRAY_LOCATION_ASSET` | no | `/usr/local/share/xray` | Directory for Xray geodata assets. |
 | `RUST_LOG` | no | `info` | `tracing` filter (`debug` when `NODE_ENV=development`). |
 | `NODE_ENV` | no | `production` | Set to `development` for debug logs. |
