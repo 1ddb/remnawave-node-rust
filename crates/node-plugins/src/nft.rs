@@ -6,8 +6,6 @@ use crabtables::{concat_key, lang, Batch, Family, Field, SetElem, SetElemList, S
 use thiserror::Error;
 use tracing::{error, warn};
 
-pub const TABLE_NAME: &str = "remnanode";
-pub const TABLE_NAME_V6: &str = "remnanode6";
 pub const TORRENT_BLOCKER_SET_NAME: &str = "torrent-blocker";
 pub const INGRESS_FILTER_IP_SET_NAME: &str = "ingress-filter-ip";
 pub const EGRESS_FILTER_IP_SET_NAME: &str = "egress-filter-ip";
@@ -39,12 +37,17 @@ impl From<crabtables::Error> for NftError {
 pub struct NftManager {
     logging: bool,
     accept_reply_traffic: bool,
+    table_name: String,
     available: bool,
 }
 
 impl NftManager {
-    pub fn new(logging: bool, accept_reply_traffic: bool) -> Self {
-        Self { logging, accept_reply_traffic, available: false }
+    pub fn new(logging: bool, accept_reply_traffic: bool, table_name: impl Into<String>) -> Self {
+        Self { logging, accept_reply_traffic, table_name: table_name.into(), available: false }
+    }
+
+    fn table_name_v6(&self) -> String {
+        format!("{}6", self.table_name)
     }
 
     pub fn is_available(&self) -> bool {
@@ -68,15 +71,17 @@ impl NftManager {
     /// is safe to call on startup and after plugin changes.
     pub async fn create_table(&self) -> Result<(), NftError> {
         let script = self.build_table_script();
-        run_blocking(move || recreate_tables_sync(&script)).await
+        let table_name = self.table_name.clone();
+        run_blocking(move || recreate_tables_sync(&script, &table_name)).await
     }
 
     pub async fn delete_table(&self) -> Result<(), NftError> {
-        run_blocking(delete_tables_sync).await
+        let table_name = self.table_name.clone();
+        run_blocking(move || delete_tables_sync(&table_name)).await
     }
 
     pub async fn add_addresses(&self, ips: &[String], set: &str) -> Result<(), NftError> {
-        let elements = build_address_elements(ips, set, None)?;
+        let elements = build_address_elements(ips, set, None, &self.table_name)?;
         run_blocking(move || add_elements_sync(elements)).await
     }
 
@@ -95,12 +100,12 @@ impl NftManager {
             Some(0) | None => None,
             Some(seconds) => Some(Duration::from_secs(seconds as u64)),
         };
-        let elements = build_address_elements(&[ip.to_string()], set, timeout)?;
+        let elements = build_address_elements(&[ip.to_string()], set, timeout, &self.table_name)?;
         run_blocking(move || add_elements_sync(elements)).await
     }
 
     pub async fn remove_addresses(&self, ips: &[String], set: &str) -> Result<(), NftError> {
-        let elements = build_address_elements(ips, set, None)?;
+        let elements = build_address_elements(ips, set, None, &self.table_name)?;
         run_blocking(move || delete_elements_sync(elements)).await
     }
 
@@ -108,21 +113,22 @@ impl NftManager {
         if ports.is_empty() {
             return Ok(());
         }
-        let elements = build_port_elements(ports, set);
+        let elements = build_port_elements(ports, set, &self.table_name);
         run_blocking(move || add_elements_sync(elements)).await
     }
 
     fn build_table_script(&self) -> String {
+        let table_name_v6 = self.table_name_v6();
         let mut script = String::new();
         script.push_str(&table_block(
-            TABLE_NAME,
+            &self.table_name,
             "",
             "ip",
             self.logging,
             self.accept_reply_traffic,
         ));
         script.push_str(&table_block(
-            TABLE_NAME_V6,
+            &table_name_v6,
             "6",
             "ip6",
             self.logging,
@@ -214,6 +220,7 @@ fn build_address_elements(
     values: &[String],
     set: &str,
     timeout: Option<Duration>,
+    table_name: &str,
 ) -> Result<Vec<Elements>, NftError> {
     let mut v4: Vec<(u128, u128)> = Vec::new();
     let mut v6: Vec<(u128, u128)> = Vec::new();
@@ -228,11 +235,12 @@ fn build_address_elements(
         }
     }
 
+    let table_name_v6 = format!("{table_name}6");
     let mut batches = Vec::new();
     push_address_elements(
         &mut batches,
         Family::Ipv4,
-        TABLE_NAME,
+        table_name,
         set,
         "",
         merge_ranges(v4, u32::MAX as u128),
@@ -241,7 +249,7 @@ fn build_address_elements(
     push_address_elements(
         &mut batches,
         Family::Ipv6,
-        TABLE_NAME_V6,
+        &table_name_v6,
         set,
         "6",
         merge_ranges(v6, u128::MAX),
@@ -289,7 +297,7 @@ fn push_address_elements(
     Ok(())
 }
 
-fn build_port_elements(ports: &[u16], set: &str) -> Vec<Elements> {
+fn build_port_elements(ports: &[u16], set: &str, table_name: &str) -> Vec<Elements> {
     let mut seen = HashSet::new();
     let mut elems = Vec::new();
     for port in ports {
@@ -308,13 +316,13 @@ fn build_port_elements(ports: &[u16], set: &str) -> Vec<Elements> {
     vec![
         Elements {
             family: Family::Ipv4,
-            table: TABLE_NAME.to_string(),
+            table: table_name.to_string(),
             set: set.to_string(),
             elems: elems.clone(),
         },
         Elements {
             family: Family::Ipv6,
-            table: TABLE_NAME_V6.to_string(),
+            table: format!("{table_name}6"),
             set: format!("{set}6"),
             elems,
         },
@@ -382,9 +390,9 @@ fn group_interval_elements(elements: Vec<SetElem>) -> Vec<Vec<SetElem>> {
     groups
 }
 
-fn recreate_tables_sync(script: &str) -> Result<(), NftError> {
+fn recreate_tables_sync(script: &str, table_name: &str) -> Result<(), NftError> {
     let mut socket = Socket::new()?;
-    delete_existing_tables(&mut socket)?;
+    delete_existing_tables(&mut socket, table_name)?;
 
     let commands = lang::parse::parse(script).map_err(|e| NftError::Command(e.to_string()))?;
     let (batch, _) =
@@ -393,17 +401,18 @@ fn recreate_tables_sync(script: &str) -> Result<(), NftError> {
     Ok(())
 }
 
-fn delete_tables_sync() -> Result<(), NftError> {
+fn delete_tables_sync(table_name: &str) -> Result<(), NftError> {
     let mut socket = Socket::new()?;
-    delete_existing_tables(&mut socket)
+    delete_existing_tables(&mut socket, table_name)
 }
 
-fn delete_existing_tables(socket: &mut Socket) -> Result<(), NftError> {
+fn delete_existing_tables(socket: &mut Socket, table_name: &str) -> Result<(), NftError> {
+    let table_name_v6 = format!("{table_name}6");
     for (family, name) in [
-        (Family::Ipv4, TABLE_NAME),
-        (Family::Ipv6, TABLE_NAME_V6),
+        (Family::Ipv4, table_name),
+        (Family::Ipv6, table_name_v6.as_str()),
         // Legacy table created by older rw-node builds.
-        (Family::Inet, TABLE_NAME),
+        (Family::Inet, table_name),
     ] {
         let exists = socket.list_tables(family)?.iter().any(|table| table.name == name);
         if !exists {
@@ -508,10 +517,19 @@ mod tests {
     fn generated_ruleset_is_valid_nft() {
         for logging in [true, false] {
             for accept in [true, false] {
-                let manager = NftManager::new(logging, accept);
+                let manager = NftManager::new(logging, accept, "remnanode");
                 compile_script(&manager.build_table_script());
             }
         }
+    }
+
+    #[test]
+    fn uses_configured_table_name() {
+        let manager = NftManager::new(false, false, "custom-node");
+        let script = manager.build_table_script();
+        assert!(script.contains("table ip custom-node {"));
+        assert!(script.contains("table ip6 custom-node6 {"));
+        compile_script(&script);
     }
 
     #[test]
@@ -532,11 +550,14 @@ mod tests {
             &["10.0.0.0/24".to_string(), "10.0.0.128/25".to_string(), "2001:db8::/64".to_string()],
             TORRENT_BLOCKER_SET_NAME,
             Some(Duration::from_secs(60)),
+            "remnanode",
         )
         .unwrap();
         assert_eq!(elements.len(), 2);
         assert_eq!(elements[0].family, Family::Ipv4);
+        assert_eq!(elements[0].table, "remnanode");
         assert_eq!(elements[0].elems.len(), 2); // merged /24 -> start + end marker
         assert_eq!(elements[1].family, Family::Ipv6);
+        assert_eq!(elements[1].table, "remnanode6");
     }
 }

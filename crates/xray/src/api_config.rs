@@ -59,7 +59,15 @@ pub fn generate_api_config(
         .cloned()
         .unwrap_or_default();
 
-    let mut rules = vec![routing_rules_model()];
+    // Xray rejects `routing.script` combined with any routing rules, so the
+    // default API rule must be omitted when a script is configured.
+    let has_routing_script =
+        config.get("routing").and_then(|r| r.get("script")).is_some_and(is_truthy);
+
+    let mut rules = Vec::new();
+    if !has_routing_script {
+        rules.push(routing_rules_model());
+    }
     rules.extend(
         existing_rules
             .into_iter()
@@ -104,6 +112,16 @@ pub fn generate_api_config(
     }
 
     Value::Object(result)
+}
+
+fn is_truthy(value: &Value) -> bool {
+    match value {
+        Value::Null => false,
+        Value::Bool(b) => *b,
+        Value::Number(n) => n.as_f64().is_some_and(|n| n != 0.0),
+        Value::String(s) => !s.is_empty(),
+        Value::Array(_) | Value::Object(_) => true,
+    }
 }
 
 fn resolve_rule_index(position: f64, rules_len: usize) -> usize {
@@ -151,6 +169,40 @@ mod tests {
         assert_eq!(result["stats"], json!({}));
         assert_eq!(result["policy"]["levels"]["0"]["statsUserOnline"], true);
         assert_eq!(result["routing"]["rules"][0]["outboundTag"], "REMNAWAVE_API");
+    }
+
+    #[test]
+    fn skips_default_routing_rule_when_script_present() {
+        let mut config = Map::new();
+        config.insert(
+            "routing".into(),
+            json!({ "script": "route.lua", "rules": [{ "ruleTag": "a" }, { "outboundTag": XRAY_API_TAG }] }),
+        );
+        let state = TorrentBlockerStateView {
+            enabled: false,
+            include_rule_tags: Default::default(),
+            rule_position: 0.0,
+        };
+        let result = generate_api_config(config, &state, &internal(), false);
+        assert_eq!(result["routing"]["script"], "route.lua");
+        let rules = result["routing"]["rules"].as_array().unwrap();
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0]["ruleTag"], "a");
+    }
+
+    #[test]
+    fn keeps_default_routing_rule_when_script_is_empty() {
+        let mut config = Map::new();
+        config.insert("routing".into(), json!({ "script": "", "rules": [] }));
+        let state = TorrentBlockerStateView {
+            enabled: false,
+            include_rule_tags: Default::default(),
+            rule_position: 0.0,
+        };
+        let result = generate_api_config(config, &state, &internal(), false);
+        let rules = result["routing"]["rules"].as_array().unwrap();
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0]["outboundTag"], XRAY_API_TAG);
     }
 
     #[test]

@@ -39,6 +39,7 @@ pub struct XrayServiceConfig {
     pub disable_hashed_set_check: bool,
     pub nftables_logging: bool,
     pub nftables_accept_reply_traffic: bool,
+    pub nftables_table_name: String,
     pub core_link: String,
 }
 
@@ -74,8 +75,11 @@ impl XrayService {
             &config.internal_rest_token,
         );
 
-        let mut nft =
-            NftManager::new(config.nftables_logging, config.nftables_accept_reply_traffic);
+        let mut nft = NftManager::new(
+            config.nftables_logging,
+            config.nftables_accept_reply_traffic,
+            config.nftables_table_name,
+        );
         let mut state = PluginState::new();
 
         if has_cap_net_admin() {

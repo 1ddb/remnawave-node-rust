@@ -24,17 +24,6 @@ fn main() {
 
     ensure_crypto_provider();
 
-    // Acquire the instance lock before touching the runtime env file or
-    // nftables, otherwise a duplicate process would clobber the state of the
-    // instance that is already running.
-    let _lock = match acquire_instance_lock() {
-        Ok(lock) => lock,
-        Err(e) => {
-            eprintln!("{e}");
-            std::process::exit(1);
-        }
-    };
-
     init_runtime_env();
 
     let config = match rw_config::load() {
@@ -44,6 +33,12 @@ fn main() {
             std::process::exit(1);
         }
     };
+
+    // Acquire the instance lock before touching nftables, otherwise a duplicate
+    // process would clobber the state of the instance that is already running.
+    // Like upstream, a duplicate instance is only warned about (unless
+    // suppressed) and is allowed to continue.
+    let _lock = acquire_instance_lock(&config);
 
     log_payload_report(&config);
 
@@ -85,6 +80,7 @@ fn main() {
                 disable_hashed_set_check: config.disable_hashed_set_check,
                 nftables_logging: config.nftables_logging,
                 nftables_accept_reply_traffic: config.nftables_accept_reply_traffic,
+                nftables_table_name: config.nftables_table_name.clone(),
                 core_link: rw_xray::process::CORE_LINK.to_string(),
             },
             network.clone(),
@@ -180,16 +176,56 @@ async fn build_start_message(
     )
 }
 
-fn acquire_instance_lock() -> Result<std::os::unix::net::UnixListener, String> {
+fn acquire_instance_lock(
+    config: &rw_config::AppConfig,
+) -> Option<std::os::unix::net::UnixListener> {
     use std::os::linux::net::SocketAddrExt;
 
-    let addr = std::os::unix::net::SocketAddr::from_abstract_name(b"rwnode-lock")
-        .map_err(|e| format!("failed to prepare instance lock: {e}"))?;
+    let Ok(addr) = std::os::unix::net::SocketAddr::from_abstract_name(b"rwnode-lock") else {
+        return None;
+    };
     match std::os::unix::net::UnixListener::bind_addr(&addr) {
-        Ok(listener) => Ok(listener),
+        Ok(listener) => Some(listener),
         Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
-            Err("Another Remnawave Node instance is already running.".to_string())
+            if !config.suppress_duplicate_instance_warning {
+                error!("\n{}\n", get_duplicate_instance_message());
+            }
+            None
         }
-        Err(e) => Err(format!("failed to acquire instance lock: {e}")),
+        Err(_) => None,
     }
+}
+
+fn get_duplicate_instance_message() -> String {
+    let rendered = render_box(
+        "ANOTHER REMNAWAVE NODE IS ALREADY RUNNING",
+        &[
+            "A second instance was detected in this network namespace. Both act on the \
+             same host-level state, which leads to unexpected behaviour that is hard to \
+             trace back to its cause."
+                .to_string(),
+            "Running more than one node per network namespace is not supported and is \
+             strongly discouraged. Use one node per host, or give each container a \
+             namespace of its own."
+                .to_string(),
+        ],
+        BoxOptions { align: Align::Left, width: 76 },
+    );
+
+    if std::env::var("NO_COLOR").is_ok_and(|v| !v.is_empty()) {
+        return rendered;
+    }
+
+    rendered
+        .lines()
+        .enumerate()
+        .map(|(i, line)| {
+            if i == 1 {
+                format!("\x1b[1;31m{line}\x1b[0m")
+            } else {
+                format!("\x1b[31m{line}\x1b[0m")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
