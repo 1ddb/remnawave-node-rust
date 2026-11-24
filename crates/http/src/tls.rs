@@ -1,7 +1,6 @@
-use std::io::BufReader;
 use std::sync::Arc;
 
-use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
 use rustls::server::{ClientHello, ResolvesServerCert, WebPkiClientVerifier};
 use rustls::sign::CertifiedKey;
 use rustls::{RootCertStore, ServerConfig};
@@ -59,17 +58,13 @@ pub fn build_server_config(
 }
 
 fn read_certs(pem: &str) -> Result<Vec<CertificateDer<'static>>, TlsError> {
-    let mut reader = BufReader::new(pem.as_bytes());
-    rustls_pemfile::certs(&mut reader)
+    CertificateDer::pem_slice_iter(pem.as_bytes())
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| TlsError::Certificate(e.to_string()))
 }
 
 fn read_key(pem: &str) -> Result<PrivateKeyDer<'static>, TlsError> {
-    let mut reader = BufReader::new(pem.as_bytes());
-    rustls_pemfile::private_key(&mut reader)
-        .map_err(|e| TlsError::Key(e.to_string()))?
-        .ok_or_else(|| TlsError::Key("no private key found".into()))
+    PrivateKeyDer::from_pem_slice(pem.as_bytes()).map_err(|e| TlsError::Key(e.to_string()))
 }
 
 struct SniCertResolver {

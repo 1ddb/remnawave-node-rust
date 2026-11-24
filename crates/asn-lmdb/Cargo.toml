@@ -3,6 +3,7 @@ name = "rw-asn-lmdb"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 
 [dependencies]
 heed.workspace = true

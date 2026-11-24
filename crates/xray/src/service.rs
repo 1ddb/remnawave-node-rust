@@ -829,7 +829,7 @@ fn hash_config(config: &Map<String, Value>) -> String {
     use sha2::{Digest, Sha256};
     let serialized = serde_json::to_string(config).unwrap_or_default();
     let digest = Sha256::digest(serialized.as_bytes());
-    format!("{digest:x}")
+    digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 fn log_available_plugins(state: &PluginState) {

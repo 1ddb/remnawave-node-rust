@@ -3,6 +3,7 @@ name = "rw-xray-rpc"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 
 [dependencies]
 http.workspace = true

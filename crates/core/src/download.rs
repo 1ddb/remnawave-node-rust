@@ -124,7 +124,7 @@ pub async fn download_file(
             return Err(DownloadError::Empty);
         }
 
-        let sha256 = format!("{:x}", hasher.finalize());
+        let sha256: String = hasher.finalize().iter().map(|b| format!("{b:02x}")).collect();
         if let Some(expected) = &options.expected_sha256 {
             if !sha256.eq_ignore_ascii_case(expected) {
                 return Err(DownloadError::HashMismatch(sha256, expected.clone()));

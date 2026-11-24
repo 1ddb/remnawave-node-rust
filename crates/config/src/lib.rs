@@ -1,8 +1,8 @@
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use hkdf::Hkdf;
-use rand::Rng;
-use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rand::RngExt;
+use rustls::pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer, SubjectPublicKeyInfoDer};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use thiserror::Error;
@@ -152,19 +152,14 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 }
 
 fn parse_cert(pem: &str) -> Result<CertificateDer<'static>, String> {
-    let mut cursor = std::io::Cursor::new(pem.as_bytes());
-    let certs = rustls_pemfile::certs(&mut cursor).collect::<Result<Vec<_>, _>>();
-    match certs {
-        Ok(certs) => certs.into_iter().next().ok_or_else(|| "no certificate found".to_string()),
-        Err(e) => Err(e.to_string()),
-    }
+    CertificateDer::pem_slice_iter(pem.as_bytes())
+        .next()
+        .ok_or_else(|| "no certificate found".to_string())?
+        .map_err(|e| e.to_string())
 }
 
 fn parse_key(pem: &str) -> Result<PrivateKeyDer<'static>, String> {
-    let mut cursor = std::io::Cursor::new(pem.as_bytes());
-    rustls_pemfile::private_key(&mut cursor)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "no private key found".to_string())
+    PrivateKeyDer::from_pem_slice(pem.as_bytes()).map_err(|e| e.to_string())
 }
 
 /// Run the same integrity checks as the Node implementation. Returns all
@@ -243,13 +238,11 @@ pub fn run_payload_checks(payload: &NodePayload) -> Vec<PayloadCheck> {
         Ok("valid".into())
     });
 
-    add("jwt public key", &|| {
-        let mut cursor = std::io::Cursor::new(payload.jwt_public_key.as_bytes());
-        let keys = rustls_pemfile::public_keys(&mut cursor).collect::<Result<Vec<_>, _>>();
-        match keys {
-            Ok(keys) if !keys.is_empty() => Ok("ok".into()),
-            _ => Err("not a valid public key".into()),
-        }
+    add("jwt public key", &|| match SubjectPublicKeyInfoDer::from_pem_slice(
+        payload.jwt_public_key.as_bytes(),
+    ) {
+        Ok(_) => Ok("ok".into()),
+        Err(_) => Err("not a valid public key".into()),
     });
 
     checks
@@ -300,8 +293,8 @@ fn required(name: &'static str) -> Result<String, ConfigError> {
 
 fn random_alnum(len: usize) -> String {
     const CHARS: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let mut rng = rand::thread_rng();
-    (0..len).map(|_| CHARS[rng.gen_range(0..CHARS.len())] as char).collect()
+    let mut rng = rand::rng();
+    (0..len).map(|_| CHARS[rng.random_range(0..CHARS.len())] as char).collect()
 }
 
 /// Reuses an existing value (from the environment or `/run/rw-node.env`) and
