@@ -13,7 +13,7 @@ Build-Depends: debhelper-compat (= 13),
                unzip,
                zstd
 Standards-Version: 4.7.0
-Homepage: https://github.com/remnawave/node
+Homepage: https://github.com/1ddb/remnawave-node-rust
 Rules-Requires-Root: no
 
 Package: rw-node

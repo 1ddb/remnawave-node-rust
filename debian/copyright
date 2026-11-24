@@ -1,10 +1,11 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: rw-node
 Upstream-Contact: Remnawave <support@remnawave.com>
-Source: https://github.com/remnawave/node
+Source: https://github.com/1ddb/remnawave-node-rust
 
 Files: *
 Copyright: Remnawave
+Copyright: 1ddb
 License: AGPL-3.0-only
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU Affero General Public License as published by the Free

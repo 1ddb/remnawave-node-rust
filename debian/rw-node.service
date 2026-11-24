@@ -1,6 +1,6 @@
 [Unit]
 Description=Remnawave Node
-Documentation=https://docs.rw
+Documentation=https://github.com/1ddb/remnawave-node-rust
 Wants=network-online.target
 After=network-online.target
 StartLimitIntervalSec=60
