@@ -115,21 +115,42 @@ jobs:
             gh release create "$TAG" --title "$TAG" --generate-notes
           gh release upload "$TAG" dist/*.deb dist/SHA256SUMS --clobber
 
+  variants:
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.bake.outputs.list }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Read variants from docker-bake.hcl
+        id: bake
+        run: |
+          list=$(docker buildx bake --print 2>/dev/null | jq -c '.group.default.targets')
+          echo "list=${list}" >> "$GITHUB_OUTPUT"
+          echo "Variants: ${list}"
+
   docker:
-    needs: preflight
+    needs: [preflight, variants]
     strategy:
       fail-fast: false
       matrix:
+        platform: [linux/amd64, linux/arm64]
+        variant: ${{ fromJson(needs.variants.outputs.list) }}
         include:
-          - runner: ubuntu-24.04
-            arch: amd64
-          - runner: ubuntu-24.04-arm
-            arch: arm64
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
     steps:
+      - name: Prepare platform pair
+        run: |
+          platform=${{ matrix.platform }}
+          pair=${platform//\//-}
+          echo "PLATFORM_PAIR=${pair}" >> "$GITHUB_ENV"
+          echo "ARCH=${pair#linux-}" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - name: Log in to GitHub Container Registry
@@ -138,43 +159,47 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Expose GitHub Actions cache
+        uses: crazy-max/ghaction-github-runtime@v4
       - name: Build and push by digest
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: docker/Dockerfile
-          platforms: linux/${{ matrix.arch }}
-          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=docker-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=docker-${{ matrix.arch }}
-          provenance: false
-          sbom: false
+        run: |
+          set -euo pipefail
+          docker buildx bake "${{ matrix.variant }}" \
+            --provenance=mode=max \
+            --sbom=true \
+            --set "*.platform=${{ matrix.platform }}" \
+            --set "*.tags=" \
+            --set '*.output=type=image,"name=ghcr.io/${{ github.repository }}",push-by-digest=true,name-canonical=true,push=true' \
+            --set "*.cache-from=type=gha,scope=docker-${ARCH}" \
+            --set "*.cache-to=type=gha,mode=max,scope=docker-${ARCH}" \
+            --metadata-file "${{ runner.temp }}/metadata.json"
       - name: Export digest
         run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${{ matrix.arch }}-${digest#sha256:}"
+          mkdir -p "${{ runner.temp }}/digests"
+          digest=$(jq -r '.["${{ matrix.variant }}"]["containerimage.digest"]' "${{ runner.temp }}/metadata.json")
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
       - uses: actions/upload-artifact@v7
         with:
-          name: digest-${{ matrix.arch }}
-          path: /tmp/digests/*
+          name: digest-${{ matrix.variant }}-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
 
   docker-manifest:
-    needs: docker
+    needs: [preflight, variants, docker]
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJson(needs.variants.outputs.list) }}
     permissions:
       contents: read
       packages: write
-      attestations: write
-      id-token: write
     steps:
       - uses: actions/download-artifact@v8
         with:
-          path: /tmp/digests
-          pattern: digest-*
+          path: ${{ runner.temp }}/digests
+          pattern: digest-${{ matrix.variant }}-*
           merge-multiple: true
       - uses: docker/setup-buildx-action@v4
       - name: Log in to GitHub Container Registry
@@ -183,54 +208,37 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(github.ref_name, '-') }}
-            type=semver,pattern={{major}},enable=${{ !contains(github.ref_name, '-') }}
-            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
-      - name: Create per-architecture manifests and push
-        working-directory: /tmp/digests
+      - name: Create & push manifest list
+        working-directory: ${{ runner.temp }}/digests
         env:
-          TAGS: ${{ steps.meta.outputs.tags }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+          PRERELEASE: ${{ contains(github.ref_name, '-') }}
         run: |
           set -euo pipefail
-          for file in *; do
-            arch="${file%%-*}"
-            digest="${file#*-}"
-            args=()
-            while IFS= read -r tag; do
-              [ -n "$tag" ] && args+=("-t" "${tag}-${arch}")
-            done <<< "$TAGS"
-            docker buildx imagetools create "${args[@]}" \
-              "ghcr.io/${{ github.repository }}@sha256:${digest}"
+          resolve() {
+            TAG="$1" docker buildx bake --file "$GITHUB_WORKSPACE/docker-bake.hcl" \
+              --print "${{ matrix.variant }}" 2>/dev/null \
+              | jq -r --arg reg "ghcr.io/${{ github.repository }}:" '.target[].tags[] | select(startswith($reg))'
+          }
+
+          refs=()
+          for digest in *; do
+            refs+=("ghcr.io/${{ github.repository }}@sha256:${digest}")
           done
-      - name: Create manifest list and push
-        working-directory: /tmp/digests
-        run: |
-          set -euo pipefail
-          sources=()
-          for file in *; do
-            sources+=("ghcr.io/${{ github.repository }}@sha256:${file#*-}")
-          done
-          docker buildx imagetools create \
-            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            "${sources[@]}"
+
+          major=${VERSION%%.*}
+          minor=${VERSION%.*}
+          tags=$( {
+            resolve "$VERSION"
+            if [ "$PRERELEASE" != "true" ]; then
+              resolve "$minor"
+              resolve "$major"
+              resolve latest
+            fi
+          } | sed 's/^/-t /' | tr '\n' ' ')
+
+          echo "Tags: ${tags}"
+          docker buildx imagetools create ${tags} "${refs[@]}"
       - name: Inspect image
         run: |
-          docker buildx imagetools inspect ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
-      - name: Resolve manifest digest
-        id: manifest
-        run: |
-          digest="$(docker buildx imagetools inspect ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }} --format '{{json .Manifest}}' | jq -r '.digest')"
-          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
-      - name: Generate artifact attestation
-        uses: actions/attest@v4
-        with:
-          subject-name: ghcr.io/${{ github.repository }}
-          subject-digest: ${{ steps.manifest.outputs.digest }}
-          push-to-registry: true
+          docker buildx imagetools inspect ghcr.io/${{ github.repository }}:${{ needs.preflight.outputs.version }}

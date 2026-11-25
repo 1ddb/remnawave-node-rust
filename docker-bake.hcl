@@ -1,18 +1,27 @@
-variable "REGISTRY" {
-  default = "1ddb/remnawave-node-rust"
-}
-
 variable "TAG" {
-  default = "latest"
+  default = "dev"
 }
 
-group "default" {
-  targets = ["rw-node"]
+variable "REGISTRIES" {
+  default = ["ghcr.io/1ddb/remnawave-node-rust"]
 }
 
-target "rw-node" {
+target "node" {
+  name = variant
+
+  matrix = {
+    variant = ["plain"]
+  }
+
   context    = "."
   dockerfile = "docker/Dockerfile"
   platforms  = ["linux/amd64", "linux/arm64"]
-  tags       = ["${REGISTRY}:${TAG}"]
+
+  tags = [
+    for registry in REGISTRIES : "${registry}:${TAG}"
+  ]
+}
+
+group "default" {
+  targets = ["plain"]
 }

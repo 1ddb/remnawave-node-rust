@@ -45,7 +45,7 @@ Node.js-версия, а Docker-образ примерно **в 2.9 раза м
 
 ### Docker Compose
 
-Замените `image` в `docker-compose.yml`:
+Замените `image` в `docker-compose-prod.yml`:
 
 ```yaml
 services:
@@ -58,7 +58,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Для новой установки сначала скопируйте [`docker-compose.yml`](docker-compose.yml)
+Для новой установки сначала скопируйте [`docker-compose-prod.yml`](docker-compose-prod.yml)
 и [`.env.sample`](.env.sample); `SECRET_KEY` берётся в настройках ноды в панели
 или при её создании.
 

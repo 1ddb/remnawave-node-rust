@@ -69,12 +69,17 @@ rebuilds dependencies from scratch:
 docker buildx build -f docker/Dockerfile -t remnawave/node:rust --load .
 ```
 
-For multi-platform builds use `docker-bake.hcl`; it requires a
-`docker-container` builder and QEMU/binfmt emulation:
+`docker-bake.hcl` is the single source of truth for image tags and platforms;
+the release workflow reads its targets and tags. For a local single-platform
+build override the platform and tag and load the result:
 
 ```bash
-docker buildx bake -f docker-bake.hcl
+docker buildx bake --set '*.platform=linux/amd64' --set '*.tags=rw-node:local' --load
 ```
+
+Multi-platform builds require a `docker-container` builder and QEMU/binfmt
+emulation; pass `--push` (or a `type=image,push=true` output) instead of
+`--load`.
 
 ## Debian package
 

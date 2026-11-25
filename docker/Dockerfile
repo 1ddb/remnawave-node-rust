@@ -78,6 +78,8 @@ FROM alpine:3.21
 
 LABEL org.opencontainers.image.title="Remnawave Node"
 LABEL org.opencontainers.image.description="Remnawave Node (Rust) with built-in XRay Core"
+LABEL org.opencontainers.image.url="https://github.com/1ddb/remnawave-node-rust"
+LABEL org.opencontainers.image.source="https://github.com/1ddb/remnawave-node-rust"
 LABEL org.opencontainers.image.vendor="Remnawave"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 LABEL org.opencontainers.image.documentation="https://docs.rw"

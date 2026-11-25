@@ -46,7 +46,7 @@ The agent is a drop-in replacement: keep the existing `.env` (`NODE_PORT`,
 
 ### Docker Compose
 
-Replace the `image` in `docker-compose.yml`:
+Replace the `image` in `docker-compose-prod.yml`:
 
 ```yaml
 services:
@@ -59,7 +59,7 @@ docker compose pull
 docker compose up -d
 ```
 
-For a new installation, copy [`docker-compose.yml`](docker-compose.yml) and
+For a new installation, copy [`docker-compose-prod.yml`](docker-compose-prod.yml) and
 [`.env.sample`](.env.sample) first; `SECRET_KEY` is available in the Panel under
 the node settings or when creating the node.
 
