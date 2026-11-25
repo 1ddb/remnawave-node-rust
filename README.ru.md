@@ -1,4 +1,6 @@
-# Remnawave Node (Rust)
+# Remnawave Node на Rust
+
+[English](README.md) | [Русский](README.ru.md)
 
 Rust-реимплементация [`remnawave/node`](https://github.com/remnawave/node),
 совместимая по API с `node` 3.4.6 (upstream-коммит `52d0f1c`). Полноценная
@@ -6,13 +8,16 @@ Rust-реимплементация [`remnawave/node`](https://github.com/remnaw
 
 ## Node.js vs Rust
 
-| Метрика | Node.js (upstream) | Rust (этот проект) |
+| Метрика | [remnawave/node](https://github.com/remnawave/node) | 1ddb/remnawave-node-rust |
 |---|---|---|
 | Язык | TypeScript / Node.js | Rust |
 | Память | ~107 MiB | ~6 MiB |
 | Образ, диск | 510 MB | 177 MB |
 | Образ, контент | 124 MB | 87.9 MB |
 | CPU в простое | 0.0% | 0.0% |
+| xray-core | отдельный бинарник | отдельный бинарник |
+
+*Сравнение без учёта xray-core.*
 
 Rust-агент потребляет примерно **в 17 раз меньше резидентной памяти**, чем
 Node.js-версия, а Docker-образ примерно **в 2.9 раза меньше на диске** и **в 1.4
@@ -65,12 +70,15 @@ docker compose up -d
 ### Debian-пакет (опционально)
 
 ```bash
-docker compose down
 curl -fsSLO "https://github.com/1ddb/remnawave-node-rust/releases/download/v3.4.6/rw-node_3.4.6-1_$(dpkg --print-architecture).deb"
 sudo apt install "./rw-node_3.4.6-1_$(dpkg --print-architecture).deb"
 sudoedit /etc/rw-node/env   # вставьте SECRET_KEY из панели
+sudo docker stop remnanode || true   # освободит порт, если старый контейнер есть
 sudo systemctl enable --now rw-node
 ```
+
+Переходите с Docker? Выполните `docker compose down` в каталоге старой установки,
+чтобы удалить остановленный контейнер.
 
 Пакет включает ядро Xray, геоданные, базу ASN и geocheck.
 
